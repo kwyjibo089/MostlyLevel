@@ -12,7 +12,8 @@ from display import EPD_2in9
 
 SDA_PIN = 4
 SCL_PIN = 5
-BUTTON_PIN = 14
+
+BUTTON_PIN = 2
 
 MPU_ADDR = 0x68
 
@@ -25,9 +26,10 @@ ALPHA = 0.90
 TOLERANCE = 0.7
 LOOP_DELAY = 0.5
 
-# E-paper should not refresh every loop.
-# Too frequent refreshes are slow and hard on the display.
-DISPLAY_REFRESH_SECONDS = 5
+# E-paper displays flicker on refresh.
+# Keep this fairly high.
+DISPLAY_REFRESH_SECONDS = 20
+DISPLAY_CHANGE_THRESHOLD = 0.5
 
 CALIBRATION_FILE = "calibration.json"
 
@@ -35,7 +37,15 @@ CALIBRATION_FILE = "calibration.json"
 # Setup
 # -----------------------------
 
-i2c = I2C(0, scl=Pin(SCL_PIN), sda=Pin(SDA_PIN), freq=I2C_FREQ)
+time.sleep(2)
+
+i2c = I2C(
+    0,
+    scl=Pin(SCL_PIN),
+    sda=Pin(SDA_PIN),
+    freq=I2C_FREQ
+)
+
 button = Pin(BUTTON_PIN, Pin.IN, Pin.PULL_UP)
 
 epd = EPD_2in9()
@@ -47,7 +57,10 @@ smooth_pitch = 0.0
 smooth_roll = 0.0
 
 last_display_update = 0
-
+last_display_pitch = None
+last_display_roll = None
+last_front_back = None
+last_left_right = None
 
 # -----------------------------
 # Calibration storage
@@ -68,7 +81,7 @@ def load_calibration():
         print("Roll offset:", round(roll_offset, 2))
 
     except Exception:
-        print("No calibration file found, using zero offsets")
+        print("No calibration file found")
         pitch_offset = 0.0
         roll_offset = 0.0
 
@@ -84,13 +97,13 @@ def save_calibration():
 
     print("Calibration saved")
 
-
 # -----------------------------
 # MPU6050 functions
 # -----------------------------
 
 def init_mpu():
     devices = i2c.scan()
+
     print("I2C devices:", devices)
 
     if MPU_ADDR not in devices:
@@ -141,6 +154,12 @@ def read_angles():
 
     return pitch, roll
 
+# -----------------------------
+# Button handling
+# -----------------------------
+
+def button_pressed():
+    return button.value() == 0
 
 # -----------------------------
 # Calibration functions
@@ -165,7 +184,10 @@ def average_angles(samples=50, delay=0.02):
     if valid == 0:
         return None
 
-    return total_pitch / valid, total_roll / valid
+    return (
+        total_pitch / valid,
+        total_roll / valid
+    )
 
 
 def calibrate_current_position():
@@ -174,13 +196,21 @@ def calibrate_current_position():
 
     print("Calibrating, keep sensor still...")
 
-    show_status_screen("CALIBRATING", "Keep sensor still")
+    show_status_screen(
+        "CALIBRATING",
+        "Keep sensor still"
+    )
 
     result = average_angles()
 
     if result is None:
-        print("Calibration failed: no valid readings")
-        show_status_screen("CAL FAILED", "No MPU readings")
+        print("Calibration failed")
+
+        show_status_screen(
+            "CAL FAILED",
+            "No MPU readings"
+        )
+
         return
 
     pitch_offset, roll_offset = result
@@ -194,8 +224,10 @@ def calibrate_current_position():
 
     save_calibration()
 
-    show_status_screen("CALIBRATED", "Position saved")
-
+    show_status_screen(
+        "CALIBRATED",
+        "Position saved"
+    )
 
 # -----------------------------
 # Helper functions
@@ -204,8 +236,10 @@ def calibrate_current_position():
 def guidance(value, positive_label, negative_label):
     if value > TOLERANCE:
         return positive_label
+
     elif value < -TOLERANCE:
         return negative_label
+
     else:
         return "OK"
 
@@ -226,7 +260,12 @@ def show_status_screen(title, message):
     epd.display()
 
 
-def show_level_screen(level_pitch, level_roll, front_back, left_right):
+def show_level_screen(
+    level_pitch,
+    level_roll,
+    front_back,
+    left_right
+):
     epd.fb.fill(1)
 
     epd.fb.text("Mostly Level", 10, 8, 0)
@@ -242,14 +281,12 @@ def show_level_screen(level_pitch, level_roll, front_back, left_right):
 
     epd.fb.hline(10, 78, 276, 0)
 
-    # Simple visual level indicator
     center_x = 148
     center_y = 102
 
     epd.fb.rect(48, 90, 200, 24, 0)
     epd.fb.vline(center_x, 86, 32, 0)
 
-    # Clamp roll to +/- 10 degrees for display
     display_roll = level_roll
 
     if display_roll > 10:
@@ -260,32 +297,52 @@ def show_level_screen(level_pitch, level_roll, front_back, left_right):
 
     bubble_x = int(center_x + display_roll * 8)
 
-    epd.fb.fill_rect(bubble_x - 8, center_y - 6, 16, 12, 0)
+    epd.fb.fill_rect(
+        bubble_x - 8,
+        center_y - 6,
+        16,
+        12,
+        0
+    )
 
     if front_back == "OK" and left_right == "OK":
         epd.fb.text("LEVEL", 124, 120, 0)
+
     else:
-        epd.fb.text("Adjust until OK", 84, 120, 0)
+        epd.fb.text(
+            "Adjust until OK",
+            84,
+            120,
+            0
+        )
 
     epd.display()
-
 
 # -----------------------------
 # Main program
 # -----------------------------
 
 print("Mostly Level starting...")
-
 print("Initializing display...")
+
 epd.init()
-show_status_screen("STARTING", "Initializing MPU")
+
+show_status_screen(
+    "STARTING",
+    "Initializing MPU"
+)
 
 load_calibration()
 
 while not init_mpu():
     print("Waiting for MPU6050...")
-    show_status_screen("MPU NOT FOUND", "Check wiring")
-    time.sleep(1)
+
+    show_status_screen(
+        "MPU NOT FOUND",
+        "Check wiring"
+    )
+
+    time.sleep(2)
 
 first_reading = None
 
@@ -293,43 +350,94 @@ while first_reading is None:
     first_reading = read_angles()
 
     if first_reading is None:
-        print("Waiting for valid sensor reading...")
-        show_status_screen("WAITING", "Sensor reading")
-        time.sleep(0.5)
+        print("Waiting for sensor...")
+
+        show_status_screen(
+            "WAITING",
+            "Sensor reading"
+        )
+
+        time.sleep(1)
 
 smooth_pitch, smooth_roll = first_reading
 
 print("Running.")
-print("Press button to calibrate current position as level.")
+print("Press button to calibrate.")
 
-show_status_screen("RUNNING", "Press button to cal")
-time.sleep(1)
+show_status_screen(
+    "RUNNING",
+    "Press button to cal"
+)
+
+time.sleep(2)
 
 while True:
+
     result = read_angles()
 
     if result is None:
-        print("Bad reading, trying to recover...")
-        show_status_screen("BAD READING", "Recovering MPU")
+        print("Bad reading")
+
+        show_status_screen(
+            "BAD READING",
+            "Recovering MPU"
+        )
+
         init_mpu()
-        time.sleep(0.2)
+
+        time.sleep(1)
+
         continue
 
     raw_pitch, raw_roll = result
 
-    smooth_pitch = ALPHA * smooth_pitch + (1 - ALPHA) * raw_pitch
-    smooth_roll = ALPHA * smooth_roll + (1 - ALPHA) * raw_roll
+    smooth_pitch = (
+        ALPHA * smooth_pitch
+        + (1 - ALPHA) * raw_pitch
+    )
 
-    if button.value() == 0:
+    smooth_roll = (
+        ALPHA * smooth_roll
+        + (1 - ALPHA) * raw_roll
+    )
+
+    # -------------------------
+    # Calibration button
+    # -------------------------
+
+    if button_pressed():
+
         calibrate_current_position()
-        time.sleep(1.0)
+
+        while button_pressed():
+            time.sleep(0.05)
+
+        time.sleep(0.3)
+
         last_display_update = 0
+        last_display_pitch = None
+        last_display_roll = None
+        last_front_back = None
+        last_left_right = None
+
+    # -------------------------
+    # Level calculations
+    # -------------------------
 
     level_pitch = smooth_pitch - pitch_offset
     level_roll = smooth_roll - roll_offset
 
-    front_back = guidance(level_pitch, "FRONT HIGH", "REAR HIGH")
-    left_right = guidance(level_roll, "RIGHT HIGH", "LEFT HIGH")
+    front_back = guidance(
+        level_pitch,
+        "FRONT HIGH",
+        "REAR HIGH"
+    )
+
+    left_right = guidance(
+        level_roll,
+        "RIGHT HIGH",
+        "LEFT HIGH"
+    )
 
     print(
         "Pitch:", round(level_pitch, 1),
@@ -338,10 +446,41 @@ while True:
         "|", left_right
     )
 
+    # -------------------------
+    # Display update control
+    # -------------------------
+
     now = time.time()
 
-    if now - last_display_update >= DISPLAY_REFRESH_SECONDS:
-        show_level_screen(level_pitch, level_roll, front_back, left_right)
+    display_changed = False
+
+    if last_display_pitch is None:
+        display_changed = True
+
+    elif abs(level_pitch - last_display_pitch) >= DISPLAY_CHANGE_THRESHOLD:
+        display_changed = True
+
+    elif abs(level_roll - last_display_roll) >= DISPLAY_CHANGE_THRESHOLD:
+        display_changed = True
+
+    elif front_back != last_front_back:
+        display_changed = True
+
+    elif left_right != last_left_right:
+        display_changed = True
+
+    if display_changed and now - last_display_update >= DISPLAY_REFRESH_SECONDS:
+        show_level_screen(
+            level_pitch,
+            level_roll,
+            front_back,
+            left_right
+        )
+
+        last_display_pitch = level_pitch
+        last_display_roll = level_roll
+        last_front_back = front_back
+        last_left_right = left_right
         last_display_update = now
 
     time.sleep(LOOP_DELAY)
