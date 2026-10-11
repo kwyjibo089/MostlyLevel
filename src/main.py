@@ -20,7 +20,7 @@ VAN_BODY = 0xFFFF
 VAN_GLASS = 0x35BF
 VAN_TRIM = 0x7BEF
 
-HORIZON_TOP = 41
+HORIZON_TOP = 19
 HORIZON_BOTTOM = HEIGHT - 1
 HORIZON_CENTER_X = WIDTH // 2
 HORIZON_CENTER_Y = (HORIZON_TOP + HORIZON_BOTTOM) // 2
@@ -70,10 +70,13 @@ def draw_header(state):
 
 
 def draw_readouts(values):
-    g.fill_rect(5, 21, 111, 18, PILL)
-    g.fill_rect(124, 21, 111, 18, PILL)
-    g.text(11, 26, "P " + angle_text(values, "pitch") + "°", WHITE)
-    g.text(130, 26, "R " + angle_text(values, "roll") + "°", WHITE)
+    box_height = 36
+    box_y = HEIGHT - box_height - 8
+
+    g.fill_rect(5, box_y, 112, box_height, PILL)
+    g.fill_rect(123, box_y, 112, box_height, PILL)
+    g.text(9, box_y + 10, "P " + angle_text(values, "pitch") + "°", WHITE, scale=2)
+    g.text(127, box_y + 10, "R " + angle_text(values, "roll") + "°", WHITE, scale=2)
 
 
 def horizon_y(x, pitch_deg, roll_slope):
@@ -138,23 +141,42 @@ def draw_ladder(pitch_deg, roll_deg):
 
 
 def draw_van_side(center_y):
-    """Small fixed camper silhouette over the moving horizon."""
-    x = 94
-    y = int(center_y - 13)
+    """Draw a larger, high-contrast side-view camper above the marker."""
+    x = 87
+    y = int(center_y - 26)
 
-    # Body, roof, and cab.
-    g.fill_rect(x + 3, y + 9, 39, 12, VAN_BODY)
-    g.fill_rect(x + 8, y + 4, 26, 7, VAN_BODY)
-    g.fill_rect(x + 33, y + 8, 15, 13, VAN_BODY)
-    g.fill_rect(x + 36, y + 10, 8, 6, VAN_GLASS)
-    g.fill_rect(x + 10, y + 6, 9, 4, VAN_GLASS)
-    g.fill_rect(x + 21, y + 6, 9, 4, VAN_GLASS)
-    g.fill_rect(x + 5, y + 13, 4, 5, VAN_TRIM)
+    # Stepped dark silhouette: tall camper body, cab roof, and sloped nose.
+    g.fill_rect(x + 4, y + 10, 48, 17, DARK)
+    g.fill_rect(x + 8, y + 3, 39, 10, DARK)
+    g.fill_rect(x + 45, y + 7, 14, 20, DARK)
+    g.fill_rect(x + 51, y + 4, 9, 5, DARK)
+    g.fill_rect(x + 57, y + 12, 8, 13, DARK)
 
-    # Wheels and a front marker.
-    g.fill_rect(x + 9, y + 18, 7, 7, BLACK)
-    g.fill_rect(x + 34, y + 18, 7, 7, BLACK)
-    g.fill_rect(x + 45, y + 17, 3, 3, YELLOW)
+    # Bright body panels set apart the camper section from the driver's cab.
+    g.fill_rect(x + 6, y + 11, 45, 13, VAN_BODY)
+    g.fill_rect(x + 10, y + 4, 35, 8, VAN_BODY)
+    g.fill_rect(x + 47, y + 8, 11, 16, VAN_BODY)
+    g.fill_rect(x + 52, y + 5, 7, 3, VAN_BODY)
+    g.fill_rect(x + 58, y + 15, 6, 8, VAN_BODY)
+
+    # Two large habitation windows and a separate driver's window.
+    g.fill_rect(x + 12, y + 6, 12, 5, VAN_GLASS)
+    g.fill_rect(x + 27, y + 6, 14, 5, VAN_GLASS)
+    g.fill_rect(x + 49, y + 10, 8, 7, VAN_GLASS)
+    g.fill_rect(x + 58, y + 13, 5, 2, VAN_GLASS)
+
+    # Door, handle, lower accent stripe, bumper, and headlight.
+    g.vline(x + 43, y + 12, 12, VAN_TRIM)
+    g.fill_rect(x + 38, y + 15, 4, 1, VAN_TRIM)
+    g.fill_rect(x + 7, y + 21, 46, 2, VAN_TRIM)
+    g.fill_rect(x + 63, y + 22, 3, 3, VAN_TRIM)
+    g.fill_rect(x + 63, y + 17, 2, 3, YELLOW)
+
+    # Broad wheels with visible hubs.
+    g.fill_rect(x + 10, y + 22, 13, 10, BLACK)
+    g.fill_rect(x + 43, y + 22, 13, 10, BLACK)
+    g.fill_rect(x + 14, y + 25, 5, 4, VAN_TRIM)
+    g.fill_rect(x + 47, y + 25, 5, 4, VAN_TRIM)
 
     marker_y = int(center_y + 12)
     for row in range(6):
@@ -173,11 +195,12 @@ def draw_horizon(pitch_deg, roll_deg):
     roll_deg = clamp(roll_deg, -45.0, 45.0)
     roll_slope = math.tan(math.radians(roll_deg))
 
-    # Paint the attitude field in narrow strips so no framebuffer is needed.
+    # Move the sky/ground boundary with pitch and roll. Positive pitch moves
+    # the horizon down, expanding the blue sky around the fixed vehicle marker.
     for x in range(0, WIDTH, 4):
         y = horizon_y(x + 2, pitch_deg, roll_slope)
         g.fill_rect(x, HORIZON_TOP, 4, y - HORIZON_TOP, SKY)
-        g.fill_rect(x, y, 4, HORIZON_BOTTOM - y, GROUND)
+        g.fill_rect(x, y, 4, HORIZON_BOTTOM - y + 1, GROUND)
 
     # Short white segments make the moving horizon line.
     for x in range(0, WIDTH, 4):
@@ -219,8 +242,8 @@ def draw_dashboard(values, state):
     display_values, pitch, roll = vehicle_values(values)
     g.clear(BLACK)
     draw_header(state)
-    draw_readouts(display_values)
     draw_horizon(pitch, roll)
+    draw_readouts(display_values)
 
 
 def save_screenshot(path="/screenshot.bmp"):
@@ -302,8 +325,8 @@ while True:
             last_render_ms == 0
             or time.ticks_diff(now, last_render_ms) >= RENDER_INTERVAL_MS
         ):
-            draw_readouts(display_values)
             draw_horizon(pitch, roll)
+            draw_readouts(display_values)
             last_attitude = attitude
             last_render_ms = time.ticks_ms()
 

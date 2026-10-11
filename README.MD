@@ -4,9 +4,7 @@ MostlyLevel is a campervan levelling system prototype. The MicroPython app draws
 
 ## Dashboard screenshot
 
-![MostlyLevel virtual horizon dashboard](screenshots/screenshot1.png)
-
-Original BMP capture: [screenshots/screenshot1.bmp](screenshots/screenshot1.bmp).
+![MostlyLevel virtual horizon dashboard](assets/screenshot.png)
 
 ## Current status
 

@@ -93,6 +93,8 @@ class ILI9341:
         self._command(0x11)  # Sleep out
         time.sleep_ms(120)
 
+        self._command(0x21)  # Display inversion on (required by this board)
+
         self._command(0x29)  # Display on
         time.sleep_ms(20)
 
