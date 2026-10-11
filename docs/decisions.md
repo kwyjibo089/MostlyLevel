@@ -12,6 +12,7 @@ This document records choices visible in the current implementation separately f
 | Display a virtual horizon using pitch and roll; omit the compass | Implemented in `src/main.py`; the BLE decoder still provides yaw but the display does not use it. Physical orientation is unverified. |
 | Swap the sensor's decoded X/roll and Y/pitch channels for vehicle display axes | Implemented in `src/main.py` after the owner reported front lift affecting horizon tilt and left lift appearing as positive pitch. This empirical mapping and its signs still need validation. |
 | Connect to the sensor over BLE using the configured address and UUIDs | Implemented in `src/ble_read.py`; GATT and packet assumptions still require confirmation from live captures. |
+| Read and display sensor battery percentage | `src/main.py` requests register `0x64` every 60 seconds while live and shows the latest percentage beside `LIVE`. Voltage percentage bands come from a related WT9011DCL-BT50 protocol table. On the owner's unit, raw 385 (3.85 V) matched the Android app's 60%; other levels on this exact model remain unverified. |
 | Keep the ESP-IDF BSP as reference material | Structural fact: it is nested under `reference/` and is not part of the MicroPython import path or a top-level build. Treating it as non-active is a documentation convention, not proof of long-term intent. |
 
 ## Dashboard integration update
@@ -35,5 +36,6 @@ The display uses a virtual horizon with pitch/roll readouts, a pitch ladder, and
 4. Does the swapped virtual-horizon axis mapping produce correct pitch/roll movement and sign in all directions? What zeroing procedure and angle limits are desired?
 5. Should the app reconnect automatically and how should it show stale/missing sensor data?
 6. What hardware test procedure and acceptance criteria define a working display and accurate levelling readout?
+7. Does the related-model voltage-to-percentage table accurately represent the battery level throughout the operating range of this exact sensor? Compare more readings with the Android app.
 
 No unresolved question should be filled in by guessing; capture hardware observations or obtain project-owner direction and record the result here or in `hardware.md`.

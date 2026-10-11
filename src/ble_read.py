@@ -17,6 +17,7 @@ _IRQ_GATTC_NOTIFY = 18
 
 WRITE_UUID_STR = "0000ffe9-0000-1000-8000-00805f9a34fb"
 NOTIFY_UUID_STR = "0000ffe4-0000-1000-8000-00805f9a34fb"
+POWER_READ_COMMAND = b"\xff\xaa\x27\x64\x00"
 
 # Kept from the existing sensor reader. This descriptor handle still needs
 # confirmation against a recorded GATT discovery on the actual sensor.
@@ -55,6 +56,37 @@ def read_int16(data, offset):
     if value >= 32768:
         value -= 65536
     return value
+
+
+def format_hex(data):
+    return " ".join("%02X" % value for value in data)
+
+
+def battery_percent(raw):
+    """Map register hundredths-of-a-volt using the related WT9011DCL table."""
+    if raw > 396:
+        return 100
+    if raw >= 393:
+        return 90
+    if raw >= 387:
+        return 75
+    if raw >= 382:
+        return 60
+    if raw >= 379:
+        return 50
+    if raw >= 377:
+        return 40
+    if raw >= 373:
+        return 30
+    if raw >= 370:
+        return 20
+    if raw >= 368:
+        return 15
+    if raw >= 350:
+        return 10
+    if raw >= 340:
+        return 5
+    return 0
 
 
 def decode_packet(packet):
@@ -110,6 +142,10 @@ class WT901BLEClient:
         self.latest = None
         self.sequence = 0
         self.last_packet_ms = 0
+        self.last_power_response = None
+        self.power_raw = None
+        self.power_voltage = None
+        self.power_percent = None
 
     def start(self):
         self.ble.irq(self._irq)
@@ -148,6 +184,24 @@ class WT901BLEClient:
         except Exception as exc:
             self.state = "ERROR"
             print("Failed to enable notifications:", exc)
+
+    def request_power_read(self, keep_previous=False):
+        """Request the sensor's power register for a one-shot diagnostic."""
+        if self.conn_handle is None or self.write_handle is None:
+            raise RuntimeError("Sensor must be connected before reading power.")
+
+        if not keep_previous:
+            self.last_power_response = None
+            self.power_raw = None
+            self.power_voltage = None
+            self.power_percent = None
+        self.ble.gattc_write(
+            self.conn_handle,
+            self.write_handle,
+            POWER_READ_COMMAND,
+            1,
+        )
+        print("Requested power register 0x64; waiting for sensor response.")
 
     def _irq(self, event, data):
         if event == _IRQ_SCAN_RESULT:
@@ -236,7 +290,23 @@ class WT901BLEClient:
             if value_handle != self.notify_handle:
                 return
 
-            values = decode_packet(bytes(notify_data))
+            packet = bytes(notify_data)
+            if len(packet) >= 4 and packet[0] == 0x55 and packet[1] == 0x71:
+                self.last_power_response = packet
+                print("Sensor register response:", format_hex(packet))
+
+                start_register = packet[2] | (packet[3] << 8)
+                if start_register == 0x64 and len(packet) >= 6:
+                    self.power_raw = packet[4] | (packet[5] << 8)
+                    self.power_voltage = self.power_raw / 100.0
+                    self.power_percent = battery_percent(self.power_raw)
+                    print(
+                        "Sensor battery: %d%% (%.2f V, raw %d)"
+                        % (self.power_percent, self.power_voltage, self.power_raw)
+                    )
+                return
+
+            values = decode_packet(packet)
             if values is None:
                 return
 

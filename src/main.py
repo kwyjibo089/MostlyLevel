@@ -28,6 +28,7 @@ PITCH_PIXELS_PER_DEGREE = 1.8
 RENDER_INTERVAL_MS = 250
 ATTITUDE_REDRAW_THRESHOLD_DEG = 0.2
 SENSOR_STALE_MS = 1500
+BATTERY_POLL_INTERVAL_MS = 60000
 
 
 print("Starting MostlyLevel dashboard")
@@ -51,6 +52,11 @@ def angle_text(values, key):
 def draw_header(state):
     g.fill_rect(0, 0, WIDTH, 19, DARK)
     g.text(7, 5, "MOSTLYLEVEL", WHITE)
+
+    battery_percent = sensor.power_percent
+    g.fill_rect(143, 2, 31, 15, DARK)
+    if battery_percent is not None:
+        g.text(149, 5, "%d%%" % battery_percent, GREEN)
 
     if state == "LIVE":
         status_colour = GREEN
@@ -294,6 +300,8 @@ last_state = None
 last_attitude = None
 last_render_ms = 0
 screen_initialized = False
+last_battery_request_ms = None
+last_battery_percent = None
 
 while True:
     now = time.ticks_ms()
@@ -307,6 +315,16 @@ while True:
     elif state == "LIVE":
         state = "WAIT"
 
+    if state == "LIVE" and sensor.write_handle is not None and (
+        last_battery_request_ms is None
+        or time.ticks_diff(now, last_battery_request_ms) >= BATTERY_POLL_INTERVAL_MS
+    ):
+        try:
+            sensor.request_power_read(keep_previous=True)
+            last_battery_request_ms = now
+        except Exception as exc:
+            print("Battery read request failed:", exc)
+
     display_values, pitch, roll = vehicle_values(sensor.latest)
     attitude = (pitch, roll)
 
@@ -317,9 +335,10 @@ while True:
         last_attitude = attitude if sensor.latest is not None else None
         last_render_ms = time.ticks_ms()
     else:
-        if state != last_state:
+        if state != last_state or sensor.power_percent != last_battery_percent:
             draw_header(state)
             last_state = state
+            last_battery_percent = sensor.power_percent
 
         if sensor.latest is not None and attitude_changed(attitude, last_attitude) and (
             last_render_ms == 0

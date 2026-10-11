@@ -4,6 +4,7 @@ Notable project changes are recorded here. This file was introduced with the ini
 
 ## Unreleased
 
+- Added an automatic battery percentage read every 60 seconds and display beside `LIVE` in the top bar. The 385 (3.85 V) reading maps to 60% using a related WT9011DCL-BT50 voltage table and matched the Android app on the connected unit.
 - Removed the compass and expanded the virtual horizon to occupy the display area below the status and pitch/roll readout bars.
 - Swapped decoded pitch/roll channels at the display boundary to match the owner's reported sensor movement; signs still need hardware confirmation.
 - Avoided full-screen clears during normal updates; the header now redraws only on connection-status changes, and the readouts/horizon redraw only when displayed pitch or roll changes.

@@ -8,7 +8,7 @@ MostlyLevel is a campervan levelling system prototype. The MicroPython app draws
 
 ## Current status
 
-- `src/main.py` draws a virtual horizon with pitch/roll readouts, a pitch ladder, and a fixed camper marker.
+- `src/main.py` draws a virtual horizon with pitch/roll readouts, a pitch ladder, a fixed camper marker, and the latest sensor battery percentage in the top bar beside the BLE status.
 - The display uses decoded pitch and roll from the WT901 BLE client and redraws the readouts and horizon when either changes by at least 0.2°. The status header redraws at startup or when connection status changes. Yaw is not displayed.
 - Dashboard operation and BLE connection/notification behavior remain unverified. An initial LCD memory-read screenshot attempt returned all-zero pixels; the replacement software-rendered screenshot path has not yet been tested on hardware. Protocol assumptions, physical board variant, and installed firmware also remain unverified.
 
@@ -64,6 +64,30 @@ After copying, power-cycle the board. MicroPython runs the board's `main.py` at 
 ```
 
 If automatic connection does not find the board, use the serial port shown by `connect list` in place of `auto`. These deployment steps have not been tested against the project's physical ESP32/display/sensor setup.
+
+### Sensor battery display and diagnostic
+
+The dashboard requests the sensor power register after BLE becomes live and then once per minute. It shows the latest percentage beside the `LIVE` status; until the first reply, the percentage area stays blank. The conversion uses the voltage-to-percentage bands published for a related WT9011DCL-BT50 model. On the connected unit, raw value `385` decoded to `3.85 V`, matching the Android app's 60% reading. The percentage conversion still needs comparison at other battery levels on this exact sensor.
+
+To use the dashboard battery display, upload the updated `main.py` and `ble_read.py` to the board, then restart it. To inspect the reading manually, upload the updated BLE client, connect the dashboard to the sensor, then open the REPL and interrupt the app with Ctrl+C:
+
+```bash
+.venv/bin/mpremote connect auto fs cp src/ble_read.py :ble_read.py
+.venv/bin/mpremote connect auto fs cp src/main.py :main.py
+.venv/bin/mpremote connect auto repl
+```
+
+At the MicroPython prompt, request the value and check the response:
+
+```python
+sensor.request_power_read()
+import time
+time.sleep_ms(1000)
+print(sensor.last_power_response)
+print(sensor.power_raw, sensor.power_voltage, sensor.power_percent)
+```
+
+The connected unit returned a `55 71` register response, with `power_raw` equal to `385`, `power_voltage` equal to `3.85`, and `power_percent` equal to `60`. If these values remain `None` on another attempt, the expected power-register response was not received during that attempt.
 
 ### Capturing a display screenshot
 
