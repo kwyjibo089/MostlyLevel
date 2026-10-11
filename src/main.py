@@ -15,18 +15,18 @@ HEIGHT = 320
 SKY = 0x249F
 GROUND = 0xB383
 DARK = 0x2104
-PANEL = 0x1082
 PILL = 0x194D
 VAN_BODY = 0xFFFF
 VAN_GLASS = 0x35BF
 VAN_TRIM = 0x7BEF
 
-HORIZON_TOP = 60
+HORIZON_TOP = 41
 HORIZON_BOTTOM = HEIGHT - 1
 HORIZON_CENTER_X = WIDTH // 2
 HORIZON_CENTER_Y = (HORIZON_TOP + HORIZON_BOTTOM) // 2
 PITCH_PIXELS_PER_DEGREE = 1.8
 RENDER_INTERVAL_MS = 250
+ATTITUDE_REDRAW_THRESHOLD_DEG = 0.2
 SENSOR_STALE_MS = 1500
 
 
@@ -68,16 +68,12 @@ def draw_header(state):
     g.fill_rect(178, 6, 7, 7, status_colour)
     g.text(189, 5, status_label, status_colour)
 
-    g.fill_rect(0, 19, WIDTH, 20, PANEL)
-    g.text(8, 25, "WT901BLE67", CYAN)
-    g.text(169, 25, "ATTITUDE", GREY)
-
 
 def draw_readouts(values):
-    g.fill_rect(5, 41, 111, 18, PILL)
-    g.fill_rect(124, 41, 111, 18, PILL)
-    g.text(11, 46, "P " + angle_text(values, "pitch") + "°", WHITE)
-    g.text(130, 46, "R " + angle_text(values, "roll") + "°", WHITE)
+    g.fill_rect(5, 21, 111, 18, PILL)
+    g.fill_rect(124, 21, 111, 18, PILL)
+    g.text(11, 26, "P " + angle_text(values, "pitch") + "°", WHITE)
+    g.text(130, 26, "R " + angle_text(values, "roll") + "°", WHITE)
 
 
 def horizon_y(x, pitch_deg, roll_slope):
@@ -193,28 +189,88 @@ def draw_horizon(pitch_deg, roll_deg):
     draw_van_side(HORIZON_CENTER_Y)
 
 
-def draw_dashboard(values, state):
-    g.clear(BLACK)
-    draw_header(state)
-
+def vehicle_values(values):
     # The observed installation responds on crossed sensor axes: raising the
     # front changes the decoded X/roll channel, while raising the left changes
     # the decoded Y/pitch channel. Map those channels to vehicle pitch/roll here.
-    pitch = 0.0 if values is None else values["roll"]
-    roll = 0.0 if values is None else values["pitch"]
-    display_values = None if values is None else {
+    if values is None:
+        return None, 0.0, 0.0
+
+    pitch = values["roll"]
+    roll = values["pitch"]
+    display_values = {
         "pitch": pitch,
         "roll": roll,
     }
+    return display_values, pitch, roll
+
+
+def attitude_changed(current, displayed):
+    if displayed is None:
+        return True
+
+    return (
+        abs(current[0] - displayed[0]) >= ATTITUDE_REDRAW_THRESHOLD_DEG
+        or abs(current[1] - displayed[1]) >= ATTITUDE_REDRAW_THRESHOLD_DEG
+    )
+
+
+def draw_dashboard(values, state):
+    display_values, pitch, roll = vehicle_values(values)
+    g.clear(BLACK)
+    draw_header(state)
     draw_readouts(display_values)
     draw_horizon(pitch, roll)
 
 
+def save_screenshot(path="/screenshot.bmp"):
+    """Render the last displayed attitude to a BMP without reading LCD MISO."""
+    global g
+
+    from screenshot import TileFramebufferDisplay, write_bmp_header, write_bmp_tile
+    import gc
+
+    gc.collect()
+    original_graphics = g
+
+    if last_attitude is None:
+        values = None
+    else:
+        # Convert the displayed vehicle axes back to the sensor-key layout
+        # expected by draw_dashboard, preserving the last rendered values.
+        values = {
+            "roll": last_attitude[0],
+            "pitch": last_attitude[1],
+        }
+
+    tile_height = 8
+    with open(path, "wb") as image_file:
+        write_bmp_header(image_file, WIDTH, HEIGHT)
+
+        try:
+            for top in range(0, HEIGHT, tile_height):
+                rows = min(tile_height, HEIGHT - top)
+                tile = TileFramebufferDisplay(WIDTH, rows, top)
+                g = Graphics(tile)
+                try:
+                    draw_dashboard(values, last_state)
+                finally:
+                    g = original_graphics
+                write_bmp_tile(image_file, tile.buffer, WIDTH, rows)
+                del tile
+                gc.collect()
+        finally:
+            g = original_graphics
+
+    return path
+
+
 sensor.start()
 
-last_sequence = -1
 last_state = None
+last_attitude = None
 last_render_ms = 0
+screen_initialized = False
 
 while True:
     now = time.ticks_ms()
@@ -228,18 +284,27 @@ while True:
     elif state == "LIVE":
         state = "WAIT"
 
-    changed = (
-        sensor.sequence != last_sequence
-        or state != last_state
-    )
+    display_values, pitch, roll = vehicle_values(sensor.latest)
+    attitude = (pitch, roll)
 
-    if changed and (
-        last_render_ms == 0
-        or time.ticks_diff(now, last_render_ms) >= RENDER_INTERVAL_MS
-    ):
+    if not screen_initialized:
         draw_dashboard(sensor.latest, state)
-        last_sequence = sensor.sequence
+        screen_initialized = True
         last_state = state
+        last_attitude = attitude if sensor.latest is not None else None
         last_render_ms = time.ticks_ms()
+    else:
+        if state != last_state:
+            draw_header(state)
+            last_state = state
+
+        if sensor.latest is not None and attitude_changed(attitude, last_attitude) and (
+            last_render_ms == 0
+            or time.ticks_diff(now, last_render_ms) >= RENDER_INTERVAL_MS
+        ):
+            draw_readouts(display_values)
+            draw_horizon(pitch, roll)
+            last_attitude = attitude
+            last_render_ms = time.ticks_ms()
 
     time.sleep_ms(30)

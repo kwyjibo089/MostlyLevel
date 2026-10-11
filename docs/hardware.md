@@ -16,6 +16,8 @@
 
 The application uses a 240 × 320 coordinate space and an ILI9341 initialization sequence. The reference BSP README describes an ES3C28P/ES3N28P family board and additional peripherals, but this does not confirm the user's physical board variant or which peripherals are fitted.
 
+An initial ILI9341 GRAM readback screenshot attempt produced an all-zero BMP, and an attempted full-screen software framebuffer allocation failed with `MemoryError`. The owner reported 193,600 bytes free after interrupting the app, but a single contiguous 153,600-byte allocation was still unavailable. The current screenshot implementation renders the dashboard in 8-row RGB565 tiles and streams a BMP to the filesystem; this smaller-allocation approach remains unverified on hardware.
+
 The firmware directory contains `ESP32_GENERIC_S3-20260824-v1.29.0.bin`. This is evidence of a firmware artifact in the repository only; the installed firmware is unknown.
 
 ## Sensor interface in source

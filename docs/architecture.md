@@ -12,7 +12,9 @@ The active code is MicroPython in `src/`. `main.py` imports `ILI9341` from `ili9
 4. `graphics.py` supplies pixel/line/rectangle operations and a small bitmap font.
 5. `main.py` starts the BLE client and draws link status, pitch/roll readouts, a moving sky/ground virtual horizon and pitch ladder, and a fixed camper marker. There is no compass in the display.
 
-The main loop polls the latest decoded sample and redraws on new samples, with a 250 ms minimum interval. BLE callbacks update sensor state only; they do not draw to the display. The dashboard shows a stale/no-data state if a sample has not arrived for 1.5 seconds. The original phone status bar, tabs, buttons, and photographic van are not recreated; the display uses simple graphics.
+`main.py` provides `save_screenshot(path)`, which redraws the last rendered values into an 8-row RGB565 tile buffer and streams a 24-bit BMP to the ESP32 filesystem. It avoids a full-screen allocation and does not read from display GRAM. Interrupt the app in the REPL and call `save_screenshot("/screenshot.bmp")`, then copy the file with `mpremote fs cp :screenshot.bmp ./screenshot.bmp`.
+
+The main loop polls the latest decoded sample. It draws the full screen once at startup, redraws the status header only when connection status changes, and redraws the pitch/roll readouts and horizon when either value differs by at least 0.2° from the last displayed attitude (with a 250 ms minimum interval between attitude redraws). This deadband suppresses small sensor noise. BLE callbacks update sensor state only; they do not draw to the display. The status changes to stale/no-data if a sample has not arrived for 1.5 seconds. The original phone status bar, tabs, buttons, and photographic van are not recreated; the display uses simple graphics.
 
 **Implemented (source):** live-data dashboard flow. **Unverified:** successful runtime operation, visual fidelity/performance, sensor-to-vehicle sign convention, and real-time usability on hardware; no validation record is checked in.
 
