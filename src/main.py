@@ -1,283 +1,245 @@
 from ili9341 import ILI9341
-from graphics import (
-    Graphics,
-    BLACK,
-    WHITE,
-    BLUE,
-    CYAN,
-    YELLOW,
-    GREEN,
-    GREY,
-)
+from graphics import Graphics, BLACK, WHITE, CYAN, YELLOW, GREEN, GREY
+from ble_read import WT901BLEClient
 
 import math
+import time
 
 
-# ============================================================
-# MostlyLevel - Artificial Horizon
-# Display: ES3C28P, 240 x 320, ILI9341
-# ============================================================
-
+# MostlyLevel virtual horizon for the 240 x 320 ILI9341 display.
+# The phone status bar, tabs, and buttons in the mockup are not device
+# hardware, so this screen keeps the attitude display only.
 WIDTH = 240
 HEIGHT = 320
 
-# RGB565 colours
 SKY = 0x249F
 GROUND = 0xB383
 DARK = 0x2104
-VAN_BODY = 0xD69A
+PANEL = 0x1082
+PILL = 0x194D
+VAN_BODY = 0xFFFF
 VAN_GLASS = 0x35BF
-VAN_WHEEL = 0x0000
-HORIZON_LINE = 0xFFFF
-MARKING = 0xFFFF
+VAN_TRIM = 0x7BEF
+
+HORIZON_TOP = 60
+HORIZON_BOTTOM = HEIGHT - 1
+HORIZON_CENTER_X = WIDTH // 2
+HORIZON_CENTER_Y = (HORIZON_TOP + HORIZON_BOTTOM) // 2
+PITCH_PIXELS_PER_DEGREE = 1.8
+RENDER_INTERVAL_MS = 250
+SENSOR_STALE_MS = 1500
 
 
-# ============================================================
-# Display setup
-# ============================================================
-
-print("Starting MostlyLevel artificial horizon")
+print("Starting MostlyLevel dashboard")
 
 lcd = ILI9341()
 lcd.backlight(True)
-
 g = Graphics(lcd)
+sensor = WT901BLEClient()
 
 
-# ============================================================
-# Simulated sensor values
-# ============================================================
-
-pitch = 4.0
-roll = -6.0
+def clamp(value, low, high):
+    return max(low, min(high, value))
 
 
-# ============================================================
-# Header
-# ============================================================
-
-def draw_header():
-    g.fill_rect(0, 0, WIDTH, 34, DARK)
-    g.text(8, 7, "MOSTLYLEVEL", WHITE, 2)
-
-    g.fill_rect(207, 10, 8, 8, YELLOW)
-    g.fill_rect(219, 10, 8, 8, GREEN)
+def angle_text(values, key):
+    if values is None:
+        return "--.-"
+    return "%+.1f" % values[key]
 
 
-# ============================================================
-# Artificial horizon
-# ============================================================
+def draw_header(state):
+    g.fill_rect(0, 0, WIDTH, 19, DARK)
+    g.text(7, 5, "MOSTLYLEVEL", WHITE)
 
-def draw_horizon(pitch_deg, roll_deg):
-    top = 34
-    bottom = 286
+    if state == "LIVE":
+        status_colour = GREEN
+    elif state in ("ERROR", "DISCONNECTED", "NO DATA"):
+        status_colour = YELLOW
+    else:
+        status_colour = CYAN
 
-    center_x = WIDTH // 2
-    center_y = 164
+    status_label = {
+        "DISCOVERING": "GATT",
+        "SETTING UP": "SETUP",
+        "DISCONNECTED": "NO LINK",
+        "NO DATA": "STALE",
+    }.get(state, state)
+    g.fill_rect(178, 6, 7, 7, status_colour)
+    g.text(189, 5, status_label, status_colour)
 
-    pitch_scale = 3.0
+    g.fill_rect(0, 19, WIDTH, 20, PANEL)
+    g.text(8, 25, "WT901BLE67", CYAN)
+    g.text(169, 25, "ATTITUDE", GREY)
 
-    pitch_deg = max(-35, min(35, pitch_deg))
-    roll_deg = max(-45, min(45, roll_deg))
 
-    pitch_offset = int(pitch_deg * pitch_scale)
+def draw_readouts(values):
+    g.fill_rect(5, 41, 111, 18, PILL)
+    g.fill_rect(124, 41, 111, 18, PILL)
+    g.text(11, 46, "P " + angle_text(values, "pitch") + "°", WHITE)
+    g.text(130, 46, "R " + angle_text(values, "roll") + "°", WHITE)
+
+
+def horizon_y(x, pitch_deg, roll_slope):
+    y = int(
+        HORIZON_CENTER_Y
+        + pitch_deg * PITCH_PIXELS_PER_DEGREE
+        + roll_slope * (x - HORIZON_CENTER_X)
+    )
+    return clamp(y, HORIZON_TOP, HORIZON_BOTTOM)
+
+
+def draw_pitch_arc():
+    """Draw the fixed curved attitude scale above the moving horizon."""
+    rx = 105
+    ry = 90
+    baseline = HORIZON_CENTER_Y + 10
+    previous = None
+
+    for x in range(15, 226, 3):
+        normalized = (x - HORIZON_CENTER_X) / float(rx)
+        if abs(normalized) > 1:
+            continue
+        y = baseline - int(ry * math.sqrt(1.0 - normalized * normalized))
+
+        if previous is not None:
+            px, py = previous
+            y0 = min(py, y)
+            g.fill_rect(px, y0, x - px + 1, max(1, abs(y - py) + 1), WHITE)
+        previous = (x, y)
+
+    for degree in range(-40, 41, 5):
+        x = HORIZON_CENTER_X + int(rx * degree / 40.0)
+        normalized = (x - HORIZON_CENTER_X) / float(rx)
+        y = baseline - int(ry * math.sqrt(max(0.0, 1.0 - normalized * normalized)))
+        tick_height = 7 if degree % 10 == 0 else 4
+        g.fill_rect(x - 1, y - tick_height // 2, 2, tick_height, WHITE)
+
+        if degree % 10 == 0:
+            label = str(degree)
+            g.text(x - len(label) * 3, y - 15, label, WHITE)
+
+
+def draw_ladder(pitch_deg, roll_deg):
+    pitch_offset = pitch_deg * PITCH_PIXELS_PER_DEGREE
     roll_slope = math.tan(math.radians(roll_deg))
 
-    strip_width = 4
-
-    # Draw sky and ground in vertical strips.
-    for x in range(0, WIDTH, strip_width):
-        actual_width = min(strip_width, WIDTH - x)
-
-        horizon_y = int(
-            center_y
-            + pitch_offset
-            + roll_slope * (x - center_x)
-        )
-
-        horizon_y = max(top, min(bottom, horizon_y))
-
-        g.fill_rect(
-            x,
-            top,
-            actual_width,
-            horizon_y - top,
-            SKY,
-        )
-
-        g.fill_rect(
-            x,
-            horizon_y,
-            actual_width,
-            bottom - horizon_y,
-            GROUND,
-        )
-
-    # Draw the horizon boundary.
-    for x in range(WIDTH - 1):
-        y1 = int(
-            center_y
-            + pitch_offset
-            + roll_slope * (x - center_x)
-        )
-
-        y2 = int(
-            center_y
-            + pitch_offset
-            + roll_slope * (x + 1 - center_x)
-        )
-
-        y1 = max(top, min(bottom - 1, y1))
-        y2 = max(top, min(bottom - 1, y2))
-
-        g.pixel(x, y1, HORIZON_LINE)
-        g.pixel(x, y2, HORIZON_LINE)
-
-    draw_horizon_markings(
-        center_x,
-        center_y + pitch_offset,
-        roll_slope,
-        top,
-        bottom,
-    )
-
-
-# ============================================================
-# Horizon markings
-# ============================================================
-
-def draw_horizon_markings(
-    center_x,
-    center_y,
-    roll_slope,
-    top,
-    bottom,
-):
-    marks = [
-        (-80, "20"),
-        (-60, ""),
-        (-40, "10"),
-        (-20, ""),
-        (20, ""),
-        (40, "-10"),
-        (60, ""),
-        (80, "-20"),
-    ]
-
-    for offset, label in marks:
-        y = center_y + offset
-
-        if y < top + 4 or y > bottom - 4:
+    for mark in (20, 10, -10, -20):
+        base_y = HORIZON_CENTER_Y + pitch_offset - mark * 1.35
+        if base_y < HORIZON_TOP + 3 or base_y > HORIZON_BOTTOM - 3:
             continue
 
-        left_x = 85
-        right_x = 155
+        for start_x, end_x in ((73, 103), (137, 167)):
+            for x in range(start_x, end_x, 3):
+                y = int(base_y + roll_slope * (x - HORIZON_CENTER_X))
+                if HORIZON_TOP < y < HORIZON_BOTTOM:
+                    g.fill_rect(x, y, 3, 2, WHITE)
 
-        left_y = int(
-            y + roll_slope * (left_x - center_x)
+        label = "%+d" % mark
+        label_y = int(base_y - 3)
+        g.text(43, label_y, label, WHITE)
+        g.text(177, label_y, label, WHITE)
+
+
+def draw_van_side(center_y):
+    """Small fixed camper silhouette over the moving horizon."""
+    x = 94
+    y = int(center_y - 13)
+
+    # Body, roof, and cab.
+    g.fill_rect(x + 3, y + 9, 39, 12, VAN_BODY)
+    g.fill_rect(x + 8, y + 4, 26, 7, VAN_BODY)
+    g.fill_rect(x + 33, y + 8, 15, 13, VAN_BODY)
+    g.fill_rect(x + 36, y + 10, 8, 6, VAN_GLASS)
+    g.fill_rect(x + 10, y + 6, 9, 4, VAN_GLASS)
+    g.fill_rect(x + 21, y + 6, 9, 4, VAN_GLASS)
+    g.fill_rect(x + 5, y + 13, 4, 5, VAN_TRIM)
+
+    # Wheels and a front marker.
+    g.fill_rect(x + 9, y + 18, 7, 7, BLACK)
+    g.fill_rect(x + 34, y + 18, 7, 7, BLACK)
+    g.fill_rect(x + 45, y + 17, 3, 3, YELLOW)
+
+    marker_y = int(center_y + 12)
+    for row in range(6):
+        half_width = row + 1
+        g.fill_rect(
+            HORIZON_CENTER_X - half_width,
+            marker_y + row,
+            half_width * 2 + 1,
+            1,
+            YELLOW,
         )
 
-        right_y = int(
-            y + roll_slope * (right_x - center_x)
-        )
 
-        if top < left_y < bottom:
-            g.hline(left_x, left_y, 24, MARKING)
+def draw_horizon(pitch_deg, roll_deg):
+    pitch_deg = clamp(pitch_deg, -35.0, 35.0)
+    roll_deg = clamp(roll_deg, -45.0, 45.0)
+    roll_slope = math.tan(math.radians(roll_deg))
 
-        if top < right_y < bottom:
-            g.hline(right_x + 12, right_y, 24, MARKING)
+    # Paint the attitude field in narrow strips so no framebuffer is needed.
+    for x in range(0, WIDTH, 4):
+        y = horizon_y(x + 2, pitch_deg, roll_slope)
+        g.fill_rect(x, HORIZON_TOP, 4, y - HORIZON_TOP, SKY)
+        g.fill_rect(x, y, 4, HORIZON_BOTTOM - y, GROUND)
 
-        if label:
-            label_y = y - 4
+    # Short white segments make the moving horizon line.
+    for x in range(0, WIDTH, 4):
+        y = horizon_y(x + 2, pitch_deg, roll_slope)
+        g.fill_rect(x, y, 4, 1, WHITE)
 
-            g.text(48, label_y, label, WHITE, 1)
-            g.text(190, label_y, label, WHITE, 1)
-
-
-# ============================================================
-# Top-down camper van
-# ============================================================
-
-def draw_van():
-    cx = WIDTH // 2
-    cy = 164
-
-    # Wheels
-    g.fill_rect(cx - 24, cy - 26, 7, 20, VAN_WHEEL)
-    g.fill_rect(cx + 17, cy - 26, 7, 20, VAN_WHEEL)
-    g.fill_rect(cx - 24, cy + 9, 7, 20, VAN_WHEEL)
-    g.fill_rect(cx + 17, cy + 9, 7, 20, VAN_WHEEL)
-
-    # Main body
-    g.fill_rect(cx - 17, cy - 34, 34, 68, VAN_BODY)
-
-    # Windscreen
-    g.fill_rect(cx - 13, cy - 27, 26, 15, VAN_GLASS)
-
-    # Rear window
-    g.fill_rect(cx - 12, cy + 16, 24, 10, VAN_GLASS)
-
-    # Roof detail
-    g.fill_rect(cx - 11, cy - 7, 22, 19, GREY)
-
-    # Bumpers
-    g.fill_rect(cx - 14, cy - 36, 28, 3, WHITE)
-    g.fill_rect(cx - 14, cy + 34, 28, 3, WHITE)
-
-    # Front marker
-    g.fill_rect(cx - 3, cy - 31, 6, 3, YELLOW)
+    draw_pitch_arc()
+    draw_ladder(pitch_deg, roll_deg)
+    draw_van_side(HORIZON_CENTER_Y)
 
 
-# ============================================================
-# Angle readouts
-# ============================================================
+def draw_dashboard(values, state):
+    g.clear(BLACK)
+    draw_header(state)
 
-def draw_angle_readouts(pitch_deg, roll_deg):
-    # MicroPython-compatible numeric formatting.
-    pitch_text = "%+.1f" % pitch_deg
-    roll_text = "%+.1f" % roll_deg
-
-    g.fill_rect(5, 39, 104, 23, DARK)
-    g.text(10, 46, "P:" + pitch_text, WHITE, 1)
-
-    g.fill_rect(131, 39, 104, 23, DARK)
-    g.text(136, 46, "R:" + roll_text, WHITE, 1)
-
-
-# ============================================================
-# Footer
-# ============================================================
-
-def draw_footer():
-    g.fill_rect(0, 287, WIDTH, 33, DARK)
-
-    g.text(8, 295, "CAMPER LEVEL", WHITE, 1)
-    g.text(8, 307, "WT901: DEMO", CYAN, 1)
-
-    g.fill_rect(190, 296, 12, 12, GREEN)
-    g.text(207, 298, "DEMO", YELLOW, 1)
+    # The observed installation responds on crossed sensor axes: raising the
+    # front changes the decoded X/roll channel, while raising the left changes
+    # the decoded Y/pitch channel. Map those channels to vehicle pitch/roll here.
+    pitch = 0.0 if values is None else values["roll"]
+    roll = 0.0 if values is None else values["pitch"]
+    display_values = None if values is None else {
+        "pitch": pitch,
+        "roll": roll,
+    }
+    draw_readouts(display_values)
+    draw_horizon(pitch, roll)
 
 
-# ============================================================
-# Render screen
-# ============================================================
+sensor.start()
 
-def draw_screen(pitch_deg, roll_deg):
-    draw_header()
-    draw_horizon(pitch_deg, roll_deg)
-    draw_van()
-    draw_angle_readouts(pitch_deg, roll_deg)
-    draw_footer()
+last_sequence = -1
+last_state = None
+last_render_ms = 0
 
+while True:
+    now = time.ticks_ms()
+    state = sensor.state
 
-# ============================================================
-# Main
-# ============================================================
+    if sensor.latest is not None:
+        if time.ticks_diff(now, sensor.last_packet_ms) > SENSOR_STALE_MS:
+            state = "NO DATA"
+        else:
+            state = "LIVE"
+    elif state == "LIVE":
+        state = "WAIT"
 
-print("Rendering artificial horizon...")
+    changed = (
+        sensor.sequence != last_sequence
+        or state != last_state
+    )
 
-draw_screen(pitch, roll)
+    if changed and (
+        last_render_ms == 0
+        or time.ticks_diff(now, last_render_ms) >= RENDER_INTERVAL_MS
+    ):
+        draw_dashboard(sensor.latest, state)
+        last_sequence = sensor.sequence
+        last_state = state
+        last_render_ms = time.ticks_ms()
 
-print("Artificial horizon rendered")
-print("Pitch: %+.1f" % pitch)
-print("Roll: %+.1f" % roll)
+    time.sleep_ms(30)

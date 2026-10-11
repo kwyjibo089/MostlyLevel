@@ -1,6 +1,7 @@
 import bluetooth
 import time
 
+
 TARGET_MAC = bytes.fromhex("F0A07ADB7D45")
 
 _IRQ_SCAN_RESULT = 5
@@ -17,17 +18,9 @@ _IRQ_GATTC_NOTIFY = 18
 WRITE_UUID_STR = "0000ffe9-0000-1000-8000-00805f9a34fb"
 NOTIFY_UUID_STR = "0000ffe4-0000-1000-8000-00805f9a34fb"
 
+# Kept from the existing sensor reader. This descriptor handle still needs
+# confirmation against a recorded GATT discovery on the actual sensor.
 CCCD_HANDLE_CANDIDATE = 16
-
-ble = bluetooth.BLE()
-ble.active(True)
-
-conn_handle = None
-notify_handle = None
-write_handle = None
-connected = False
-
-last_print_time = 0
 
 
 def format_address(addr):
@@ -59,29 +52,17 @@ def normalize_uuid(uuid):
 def read_int16(data, offset):
     """Read a signed 16-bit little-endian integer."""
     value = data[offset] | (data[offset + 1] << 8)
-
     if value >= 32768:
         value -= 65536
-
     return value
 
 
 def decode_packet(packet):
-    """
-    Decode a WT901BLE 0x61 packet.
-
-    Expected format:
-    55 61 + 9 signed 16-bit values
-    """
-
-    if len(packet) != 20:
-        return None
-
-    if packet[0] != 0x55 or packet[1] != 0x61:
+    """Decode the 20-byte 0x61 notification format used by the old reader."""
+    if len(packet) != 20 or packet[0] != 0x55 or packet[1] != 0x61:
         return None
 
     raw = []
-
     for offset in range(2, 20, 2):
         raw.append(read_int16(packet, offset))
 
@@ -93,11 +74,9 @@ def decode_packet(packet):
         "acc_x": ax * 16.0 / 32768.0,
         "acc_y": ay * 16.0 / 32768.0,
         "acc_z": az * 16.0 / 32768.0,
-
         "gyro_x": gx * 2000.0 / 32768.0,
         "gyro_y": gy * 2000.0 / 32768.0,
         "gyro_z": gz * 2000.0 / 32768.0,
-
         "roll": roll * 180.0 / 32768.0,
         "pitch": pitch * 180.0 / 32768.0,
         "yaw": yaw * 180.0 / 32768.0,
@@ -105,215 +84,188 @@ def decode_packet(packet):
 
 
 def print_measurements(values):
-    print()
-    print("-------- WT901BLE67 --------")
-
     print(
-        "Roll:       {:+8.2f} deg".format(values["roll"])
-    )
-    print(
-        "Pitch:      {:+8.2f} deg".format(values["pitch"])
-    )
-    print(
-        "Yaw:        {:+8.2f} deg".format(values["yaw"])
-    )
-
-    print()
-
-    print(
-        "Accel X:    {:+8.3f} g".format(values["acc_x"])
-    )
-    print(
-        "Accel Y:    {:+8.3f} g".format(values["acc_y"])
-    )
-    print(
-        "Accel Z:    {:+8.3f} g".format(values["acc_z"])
-    )
-
-    print()
-
-    print(
-        "Gyro X:     {:+8.2f} deg/s".format(values["gyro_x"])
-    )
-    print(
-        "Gyro Y:     {:+8.2f} deg/s".format(values["gyro_y"])
-    )
-    print(
-        "Gyro Z:     {:+8.2f} deg/s".format(values["gyro_z"])
-    )
-
-    print("----------------------------")
-
-
-def enable_notifications():
-    print("Enabling sensor notifications...")
-
-    try:
-        ble.gattc_write(
-            conn_handle,
-            CCCD_HANDLE_CANDIDATE,
-            b"\x01\x00",
-            1,
+        "WT901BLE67 P:{:+.2f} R:{:+.2f} Y:{:+.2f}".format(
+            values["pitch"], values["roll"], values["yaw"]
         )
-        print("Notification enable request submitted.")
-
-    except Exception as exc:
-        print("Failed to enable notifications:", exc)
+    )
 
 
-def on_ble_event(event, data):
-    global conn_handle
-    global notify_handle, write_handle
-    global connected, last_print_time
+class WT901BLEClient:
+    """Connect to the configured sensor and retain its latest decoded sample.
 
-    if event == _IRQ_SCAN_RESULT:
-        addr_type, addr, adv_type, rssi, adv_data = data
+    BLE IRQ callbacks only update state and values. The display loop polls
+    `latest`, so SPI rendering never runs inside the BLE interrupt handler.
+    """
 
-        if bytes(addr) == TARGET_MAC and not connected:
-            print("\nWT901BLE67 found:", format_address(addr))
-            print("RSSI:", rssi, "dBm")
+    def __init__(self):
+        self.ble = bluetooth.BLE()
+        self.ble.active(True)
 
-            try:
-                ble.gap_scan(None)
-                ble.gap_connect(addr_type, addr)
-                print("Connecting...")
+        self.conn_handle = None
+        self.notify_handle = None
+        self.write_handle = None
+        self.connected = False
+        self.state = "IDLE"
+        self.latest = None
+        self.sequence = 0
+        self.last_packet_ms = 0
 
-            except Exception as exc:
-                print("Connection failed:", exc)
+    def start(self):
+        self.ble.irq(self._irq)
+        self._start_scan()
 
-    elif event == _IRQ_SCAN_DONE:
-        print("Scan complete.")
-
-    elif event == _IRQ_PERIPHERAL_CONNECT:
-        conn_handle, addr_type, addr = data
-        connected = True
-
-        print("\nConnected to WT901BLE67.")
-        print("Connection handle:", conn_handle)
+    def _start_scan(self):
+        self.conn_handle = None
+        self.notify_handle = None
+        self.write_handle = None
+        self.connected = False
+        self.state = "SCANNING"
+        print("Scanning for WT901BLE67:", format_address(TARGET_MAC))
 
         try:
-            ble.gattc_discover_services(conn_handle)
-            print("Discovering services...")
-
+            self.ble.gap_scan(15000, 30000, 30000, True)
         except Exception as exc:
-            print("Service discovery failed:", exc)
+            self.state = "ERROR"
+            print("BLE scan failed:", exc)
 
-    elif event == _IRQ_GATTC_SERVICE_RESULT:
-        handle, start_handle, end_handle, uuid = data
+    def _enable_notifications(self):
+        if self.conn_handle is None or self.notify_handle is None:
+            self.state = "ERROR"
+            return
 
-        print(
-            "Service:",
-            start_handle,
-            end_handle,
-            uuid,
-        )
+        self.state = "SETTING UP"
+        try:
+            # This is the handle used by the existing reader. It is not
+            # derived from the discovered descriptor table yet.
+            self.ble.gattc_write(
+                self.conn_handle,
+                CCCD_HANDLE_CANDIDATE,
+                b"\x01\x00",
+                1,
+            )
+            print("Requested sensor notifications.")
+        except Exception as exc:
+            self.state = "ERROR"
+            print("Failed to enable notifications:", exc)
 
-    elif event == _IRQ_GATTC_SERVICE_DONE:
-        status = data[1]
+    def _irq(self, event, data):
+        if event == _IRQ_SCAN_RESULT:
+            addr_type, addr, adv_type, rssi, adv_data = data
 
-        print("Service discovery complete:", status)
+            if bytes(addr) == TARGET_MAC and not self.connected:
+                print("Found WT901BLE67", format_address(addr), "RSSI", rssi)
+                self.state = "CONNECTING"
+                try:
+                    self.ble.gap_scan(None)
+                    self.ble.gap_connect(addr_type, bytes(addr))
+                except Exception as exc:
+                    self.state = "ERROR"
+                    print("Connection request failed:", exc)
 
-        if status == 0:
+        elif event == _IRQ_SCAN_DONE:
+            # A scan is stopped explicitly when the target is found.
+            # Restart only when the timed scan ended without finding it.
+            if self.state == "SCANNING":
+                self._start_scan()
+
+        elif event == _IRQ_PERIPHERAL_CONNECT:
+            self.conn_handle, addr_type, addr = data
+            self.connected = True
+            self.state = "DISCOVERING"
+            print("Connected to WT901BLE67.")
             try:
-                ble.gattc_discover_characteristics(
-                    conn_handle,
-                    1,
-                    0xFFFF,
-                )
+                self.ble.gattc_discover_services(self.conn_handle)
             except Exception as exc:
-                print("Characteristic discovery failed:", exc)
+                self.state = "ERROR"
+                print("Service discovery failed:", exc)
 
-    elif event == _IRQ_GATTC_CHARACTERISTIC_RESULT:
-        (
-            callback_conn_handle,
-            def_handle,
-            value_handle,
-            properties,
-            uuid,
-        ) = data
+        elif event == _IRQ_GATTC_SERVICE_RESULT:
+            handle, start_handle, end_handle, uuid = data
+            print("Service:", start_handle, end_handle, uuid)
 
-        uuid_str = normalize_uuid(uuid)
+        elif event == _IRQ_GATTC_SERVICE_DONE:
+            callback_conn_handle, status = data
+            if status == 0:
+                try:
+                    self.ble.gattc_discover_characteristics(
+                        self.conn_handle, 1, 0xFFFF
+                    )
+                except Exception as exc:
+                    self.state = "ERROR"
+                    print("Characteristic discovery failed:", exc)
+            else:
+                self.state = "ERROR"
+                print("Service discovery status:", status)
 
-        print(
-            "Characteristic:",
-            uuid_str,
-            "value handle:",
-            value_handle,
-            "properties:",
-            properties,
-        )
+        elif event == _IRQ_GATTC_CHARACTERISTIC_RESULT:
+            (
+                callback_conn_handle,
+                def_handle,
+                value_handle,
+                properties,
+                uuid,
+            ) = data
+            uuid_str = normalize_uuid(uuid)
+            print("Characteristic:", uuid_str, "handle:", value_handle)
 
-        if uuid_str == NOTIFY_UUID_STR:
-            notify_handle = value_handle
+            if uuid_str == NOTIFY_UUID_STR:
+                self.notify_handle = value_handle
+            elif uuid_str == WRITE_UUID_STR:
+                self.write_handle = value_handle
 
-        elif uuid_str == WRITE_UUID_STR:
-            write_handle = value_handle
+        elif event == _IRQ_GATTC_CHARACTERISTIC_DONE:
+            callback_conn_handle, status = data
+            if status == 0 and self.notify_handle is not None:
+                self._enable_notifications()
+            else:
+                self.state = "ERROR"
+                print("Sensor notification characteristic not found.")
 
-    elif event == _IRQ_GATTC_CHARACTERISTIC_DONE:
-        status = data[1]
+        elif event == _IRQ_GATTC_WRITE_DONE:
+            callback_conn_handle, value_handle, status = data
+            if value_handle == CCCD_HANDLE_CANDIDATE and status == 0:
+                self.state = "LIVE"
+                print("Sensor notifications enabled.")
+            elif value_handle == CCCD_HANDLE_CANDIDATE:
+                self.state = "ERROR"
+                print("Notification setup status:", status)
 
-        print("Characteristic discovery complete:", status)
-        print("Notification handle:", notify_handle)
-        print("Write handle:", write_handle)
+        elif event == _IRQ_GATTC_NOTIFY:
+            notify_conn_handle, value_handle, notify_data = data
+            if value_handle != self.notify_handle:
+                return
 
-        if status == 0 and notify_handle is not None:
-            enable_notifications()
-        else:
-            print("Could not find notification characteristic.")
+            values = decode_packet(bytes(notify_data))
+            if values is None:
+                return
 
-    elif event == _IRQ_GATTC_WRITE_DONE:
-        print("GATT write completed:", data)
+            self.latest = values
+            self.last_packet_ms = time.ticks_ms()
+            self.sequence += 1
 
-    elif event == _IRQ_GATTC_NOTIFY:
-        notify_conn_handle, value_handle, notify_data = data
-
-        if value_handle != notify_handle:
-            return
-
-        packet = bytes(notify_data)
-        values = decode_packet(packet)
-
-        if values is None:
-            print("Unexpected packet:", packet.hex())
-            return
-
-        # Print at most five times per second.
-        # This keeps the serial console readable.
-        now = time.ticks_ms()
-
-        if (
-            last_print_time == 0
-            or time.ticks_diff(now, last_print_time) >= 200
-        ):
-            last_print_time = now
-            print_measurements(values)
-
-    elif event == _IRQ_PERIPHERAL_DISCONNECT:
-        disconnected_handle, addr_type, addr = data
-
-        print("\nSensor disconnected:", format_address(addr))
-
-        connected = False
-        conn_handle = None
-        notify_handle = None
-        write_handle = None
+        elif event == _IRQ_PERIPHERAL_DISCONNECT:
+            disconnected_handle, addr_type, addr = data
+            print("Sensor disconnected:", format_address(addr))
+            self.latest = None
+            self.sequence += 1
+            self.state = "DISCONNECTED"
+            self._start_scan()
 
 
-ble.irq(on_ble_event)
+def run_console_reader():
+    """Optional serial diagnostic entry point; importing this module is safe."""
+    client = WT901BLEClient()
+    client.start()
+    last_sequence = -1
 
-print("Scanning for WT901BLE67...")
-print("Target MAC: F0:A0:7A:DB:7D:45")
-print("Make sure the sensor is powered on.")
+    while True:
+        if client.sequence != last_sequence:
+            last_sequence = client.sequence
+            if client.latest is not None:
+                print_measurements(client.latest)
+        time.sleep_ms(100)
 
-try:
-    ble.gap_scan(
-        15000,
-        30000,
-        30000,
-        True,
-    )
-except Exception as exc:
-    print("BLE scan failed:", exc)
 
-while True:
-    time.sleep_ms(100)
+if __name__ == "__main__":
+    run_console_reader()

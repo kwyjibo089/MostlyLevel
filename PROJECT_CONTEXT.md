@@ -2,7 +2,7 @@
 
 ## Purpose and current shape
 
-MostlyLevel is a campervan levelling display prototype. The active application is a small MicroPython program under `src/`; it draws a static artificial-horizon demo on an ILI9341 display. Separate BLE scripts explore and read a WT901BLE67-like sensor. The reader currently prints decoded values to the serial console; it is not connected to the display app.
+MostlyLevel is a campervan levelling display prototype. The active application is a small MicroPython program under `src/`; it draws a pitch-and-roll virtual horizon on an ILI9341 display and consumes decoded readings from the WT901 BLE client in `ble_read.py`. The decoder also returns yaw, which the display currently ignores.
 
 The repository also contains an ESP-IDF board support package under `reference/esp32_s3_es3c28p/`. Treat it as reference material, not as the active application build. A MicroPython ESP32_GENERIC_S3 firmware image is present under `firmware/`; its presence does not document how it was flashed or which device currently runs it.
 
@@ -15,11 +15,11 @@ The repository also contains an ESP-IDF board support package under `reference/e
 
 ## Current status
 
-- **Implemented (source):** MicroPython ILI9341 SPI driver and graphics primitives; static demo screen; BLE scan/discovery utility; BLE notification reader and fixed-format packet decoder.
-- **Tested:** No tests or hardware validation results are documented in the repository.
-- **Planned:** Live sensor-to-display integration is the apparent project direction, but no formal roadmap or acceptance criteria existed in the source snapshot.
-- **Unverified:** exact physical board variant, deployed firmware, display behavior on the current device, BLE GATT details, sensor packet assumptions/scales, and physical angle conventions.
+- **Implemented (source):** MicroPython ILI9341 SPI driver and graphics primitives; virtual horizon with pitch/roll readouts, pitch ladder, and camper marker; BLE client, notification setup attempt, and fixed-format packet decoder. `main.py` swaps decoded X/roll and Y/pitch for displayed vehicle axes based on the owner's reported sensor movement; signs remain to be checked. `ble_scan.py` remains a standalone discovery diagnostic.
+- **Tested:** No tests or hardware validation results are documented for the dashboard integration.
+- **Planned:** confirm the sensor protocol and notification descriptor handling; verify the empirically swapped vehicle axis mapping, signs, and display scaling against the installed sensor.
+- **Unverified:** exact physical board variant, deployed firmware, dashboard rendering on the current device, BLE GATT details, sensor packet assumptions/scales, and physical angle conventions.
 
 ## Important constraints
 
-Do not claim the demo values come from the sensor. Do not treat features in the reference BSP (touch, LVGL, audio, storage, etc.) as application features. Consult `docs/architecture.md`, `docs/hardware.md`, and `docs/decisions.md` before making assumptions.
+Do not claim hardware operation has been verified. Do not treat features in the reference BSP (touch, LVGL, audio, storage, etc.) as application features. Consult `docs/architecture.md`, `docs/hardware.md`, and `docs/decisions.md` before making assumptions.

@@ -10,17 +10,18 @@ The active code is MicroPython in `src/`. `main.py` imports `ILI9341` from `ili9
 2. `ili9341.py` configures SPI bus 2 at 20 MHz with SCK GPIO 12, MOSI 11, MISO 13; CS is GPIO 10, DC GPIO 46, and backlight GPIO 45.
 3. The driver sends an ILI9341 initialization sequence, configures RGB565, and writes pixels using address windows and small repeated-color chunks rather than a full-screen framebuffer.
 4. `graphics.py` supplies pixel/line/rectangle operations and a small bitmap font.
-5. `main.py` draws header, horizon, markings, a stationary van graphic, angle readouts, and footer. It calls `draw_screen` once with hard-coded `pitch = 4.0` and `roll = -6.0`.
+5. `main.py` starts the BLE client and draws link status, pitch/roll readouts, a moving sky/ground virtual horizon and pitch ladder, and a fixed camper marker. There is no compass in the display.
 
-**Implemented (source):** one-time demo rendering and low-level drawing functions. **Unverified:** successful operation on the current hardware; no display test record is checked in. There is no continuous render loop or sensor-fed display update.
+The main loop polls the latest decoded sample and redraws on new samples, with a 250 ms minimum interval. BLE callbacks update sensor state only; they do not draw to the display. The dashboard shows a stale/no-data state if a sample has not arrived for 1.5 seconds. The original phone status bar, tabs, buttons, and photographic van are not recreated; the display uses simple graphics.
+
+**Implemented (source):** live-data dashboard flow. **Unverified:** successful runtime operation, visual fidelity/performance, sensor-to-vehicle sign convention, and real-time usability on hardware; no validation record is checked in.
 
 ## BLE tools and sensor data path
 
-- `ble_scan.py` scans for the fixed address `F0:A0:7A:DB:7D:45`, connects, discovers services/characteristics, and prints discovery results. It is exploratory tooling.
-- `ble_read.py` separately scans/connects to that address, discovers characteristics, looks for UUIDs `FFE4` (notify) and `FFE9` (write), writes `01 00` to hard-coded handle 16 as a notification-enable attempt, and decodes matching notifications as 20-byte `55 61` packets. It prints values to the console.
-- `main.py` does not import either BLE script. There is no implemented sensor-to-screen data path.
+- `ble_read.py` exposes `WT901BLEClient`, which scans/connects to the fixed address, discovers characteristics, looks for UUID `FFE4` (notify), attempts to enable notifications by writing `01 00` to hard-coded handle 16, and decodes matching notifications as 20-byte `55 61` packets. It keeps the latest values for the app and can also run standalone as a console diagnostic.
+- `main.py` maps the decoded X/roll channel to displayed vehicle pitch and the decoded Y/pitch channel to displayed vehicle roll, based on the owner's reported movement response. The client still decodes yaw, but the display ignores it. `ble_scan.py` remains a separate discovery diagnostic and is not used by the app. The mapping's signs and physical validity remain to be confirmed.
 
-The decoder checks length and the first two bytes but has no checksum validation or stream reassembly. Field ordering, conversion ranges, characteristic UUIDs, CCCD handle, and address are source-level assumptions pending sensor-side validation. BLE reconnect/rescan behavior is not implemented.
+The decoder checks length and the first two bytes but has no checksum validation or stream reassembly. Field ordering, conversion ranges, characteristic UUIDs, CCCD handle, and address remain source-level assumptions pending sensor-side validation. The client retries scanning after scan timeout and reconnects by scanning after disconnection; other BLE errors do not have a full recovery strategy.
 
 ## Reference implementation boundary
 
