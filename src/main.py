@@ -1,14 +1,14 @@
 from ili9341 import ILI9341
 from graphics import Graphics, BLACK, WHITE, CYAN, YELLOW, GREEN, GREY
 from ble_read import WT901BLEClient
+from touch import TouchInput
 
 import math
 import time
 
 
 # MostlyLevel virtual horizon for the 240 x 320 ILI9341 display.
-# The phone status bar, tabs, and buttons in the mockup are not device
-# hardware, so this screen keeps the attitude display only.
+# The app provides a virtual horizon and a four-corner lift estimate page.
 WIDTH = 240
 HEIGHT = 320
 
@@ -20,7 +20,7 @@ VAN_BODY = 0xFFFF
 VAN_GLASS = 0x35BF
 VAN_TRIM = 0x7BEF
 
-HORIZON_TOP = 19
+HORIZON_TOP = 40
 HORIZON_BOTTOM = HEIGHT - 1
 HORIZON_CENTER_X = WIDTH // 2
 HORIZON_CENTER_Y = (HORIZON_TOP + HORIZON_BOTTOM) // 2
@@ -29,6 +29,9 @@ RENDER_INTERVAL_MS = 250
 ATTITUDE_REDRAW_THRESHOLD_DEG = 0.2
 SENSOR_STALE_MS = 1500
 BATTERY_POLL_INTERVAL_MS = 60000
+WHEELBASE_MM = 4035.0
+FRONT_TRACK_MM = 1810.0
+REAR_TRACK_MM = 1790.0
 
 
 print("Starting MostlyLevel dashboard")
@@ -37,6 +40,15 @@ lcd = ILI9341()
 lcd.backlight(True)
 g = Graphics(lcd)
 sensor = WT901BLEClient()
+try:
+    touch = TouchInput()
+    print("Touchscreen ready.")
+except Exception as exc:
+    touch = None
+    print("Touchscreen unavailable:", exc)
+
+active_screen = 0
+corner_view = 0
 
 
 def clamp(value, low, high):
@@ -73,6 +85,110 @@ def draw_header(state):
     }.get(state, state)
     g.fill_rect(178, 6, 7, 7, status_colour)
     g.text(189, 5, status_label, status_colour)
+
+
+def draw_navigation():
+    buttons = ((4, 21, 112, "HORIZON"), (124, 21, 112, "LEVELLING"))
+    for index, (x, y, width, label) in enumerate(buttons):
+        fill = PILL if index == active_screen else DARK
+        edge = CYAN if index == active_screen else GREY
+        g.fill_rect(x, y, width, 17, fill)
+        g.rect(x, y, width, 17, edge)
+        g.text(x + (width - len(label) * 6) // 2, y + 5, label, WHITE)
+
+
+def draw_corner_view_tabs():
+    tabs = ((12, "2 WEDGES"), (128, "4 CORNERS"))
+    for index, (x, label) in enumerate(tabs):
+        fill = PILL if index == corner_view else DARK
+        edge = CYAN if index == corner_view else GREY
+        g.fill_rect(x, 42, 100, 17, fill)
+        g.rect(x, 42, 100, 17, edge)
+        g.text(x + (100 - len(label) * 6) // 2, 47, label, WHITE)
+
+
+def corner_lift_heights(values):
+    """Return minimum lift to level all four corners, in centimeters.
+
+    Positive display pitch is assumed to mean front-high; positive display
+    roll is assumed to mean left-high. Validate these signs after mounting.
+    """
+    display_values, pitch, roll = vehicle_values(values)
+    if display_values is None:
+        return None
+
+    pitch_slope = math.tan(math.radians(pitch))
+    roll_slope = math.tan(math.radians(roll))
+    front_x = WHEELBASE_MM / 2.0
+    rear_x = -front_x
+    front_y = FRONT_TRACK_MM / 2.0
+    rear_y = REAR_TRACK_MM / 2.0
+
+    elevations = {
+        "FRONT LEFT": front_x * pitch_slope + front_y * roll_slope,
+        "FRONT RIGHT": front_x * pitch_slope - front_y * roll_slope,
+        "REAR LEFT": rear_x * pitch_slope + rear_y * roll_slope,
+        "REAR RIGHT": rear_x * pitch_slope - rear_y * roll_slope,
+    }
+    highest = max(elevations.values())
+    return {corner: (highest - height) / 10.0 for corner, height in elevations.items()}
+
+
+def draw_wedge_spot(number, label, height_cm, y):
+    x = 4
+    width = 232
+    height = 100
+    g.fill_rect(x, y, width, height, DARK)
+    g.rect(x, y, width, height, GREY)
+    g.text(x + 12, y + 14, "%d. %s" % (number, label), CYAN)
+
+    value = "--.- cm" if height_cm is None else "%.1f cm" % height_cm
+    value_x = x + (width - len(value) * 12) // 2
+    g.text(value_x, y + 43, value, WHITE, scale=2)
+
+
+def draw_corner_value(label, height_cm, x, y):
+    width = 112
+    height = 116
+    g.fill_rect(x, y, width, height, DARK)
+    g.rect(x, y, width, height, GREY)
+    label_x = x + (width - len(label) * 6) // 2
+    g.text(label_x, y + 23, label, CYAN)
+    value = "--.- cm" if height_cm is None else "%.1f cm" % height_cm
+    value_x = x + (width - len(value) * 12) // 2
+    g.text(value_x, y + 50, value, WHITE, scale=2)
+
+
+def draw_corner_heights(values):
+    heights = corner_lift_heights(values)
+    g.fill_rect(0, HORIZON_TOP, WIDTH, HEIGHT - HORIZON_TOP, BLACK)
+    draw_corner_view_tabs()
+
+    if heights is None:
+        if corner_view == 0:
+            draw_wedge_spot(1, "--", None, 68)
+            draw_wedge_spot(2, "--", None, 188)
+        else:
+            front_left = front_right = rear_left = rear_right = None
+            draw_corner_value("FRONT LEFT", front_left, 4, 62)
+            draw_corner_value("FRONT RIGHT", front_right, 124, 62)
+            draw_corner_value("REAR LEFT", rear_left, 4, 190)
+            draw_corner_value("REAR RIGHT", rear_right, 124, 190)
+        return
+
+    ranked = sorted(heights.items(), key=lambda item: item[1], reverse=True)
+    if corner_view == 0:
+        if ranked[0][1] < 0.5:
+            g.text(69, 157, "NO WEDGES NEEDED", GREEN)
+            g.text(62, 178, "VAN IS LEVEL", WHITE)
+            return
+        draw_wedge_spot(1, ranked[0][0], ranked[0][1], 68)
+        draw_wedge_spot(2, ranked[1][0], ranked[1][1], 188)
+    else:
+        draw_corner_value("FRONT LEFT", heights["FRONT LEFT"], 4, 62)
+        draw_corner_value("FRONT RIGHT", heights["FRONT RIGHT"], 124, 62)
+        draw_corner_value("REAR LEFT", heights["REAR LEFT"], 4, 190)
+        draw_corner_value("REAR RIGHT", heights["REAR RIGHT"], 124, 190)
 
 
 def draw_readouts(values):
@@ -245,11 +361,39 @@ def attitude_changed(current, displayed):
 
 
 def draw_dashboard(values, state):
-    display_values, pitch, roll = vehicle_values(values)
     g.clear(BLACK)
     draw_header(state)
-    draw_horizon(pitch, roll)
-    draw_readouts(display_values)
+    draw_navigation()
+    if active_screen == 0:
+        display_values, pitch, roll = vehicle_values(values)
+        draw_horizon(pitch, roll)
+        draw_readouts(display_values)
+    else:
+        draw_corner_heights(values)
+
+
+def touch_screen_at(point):
+    if point is None:
+        return None
+    x, y = point
+    if 21 <= y < 38:
+        if 4 <= x < 116:
+            return 0
+        if 124 <= x < 236:
+            return 1
+    return None
+
+
+def touch_corner_view_at(point):
+    if point is None:
+        return None
+    x, y = point
+    if 42 <= y < 59:
+        if 12 <= x < 112:
+            return 0
+        if 128 <= x < 228:
+            return 1
+    return None
 
 
 def save_screenshot(path="/screenshot.bmp"):
@@ -302,6 +446,7 @@ last_render_ms = 0
 screen_initialized = False
 last_battery_request_ms = None
 last_battery_percent = None
+touch_was_down = False
 
 while True:
     now = time.ticks_ms()
@@ -344,9 +489,30 @@ while True:
             last_render_ms == 0
             or time.ticks_diff(now, last_render_ms) >= RENDER_INTERVAL_MS
         ):
-            draw_horizon(pitch, roll)
-            draw_readouts(display_values)
+            if active_screen == 0:
+                draw_horizon(pitch, roll)
+                draw_readouts(display_values)
+            else:
+                draw_corner_heights(sensor.latest)
             last_attitude = attitude
             last_render_ms = time.ticks_ms()
+
+    if touch is not None:
+        try:
+            touch_point = touch.read()
+            if touch_point is not None and not touch_was_down:
+                selected_screen = touch_screen_at(touch_point)
+                if selected_screen is not None and selected_screen != active_screen:
+                    active_screen = selected_screen
+                    draw_dashboard(sensor.latest, state)
+                elif active_screen == 1:
+                    selected_view = touch_corner_view_at(touch_point)
+                    if selected_view is not None and selected_view != corner_view:
+                        corner_view = selected_view
+                        draw_dashboard(sensor.latest, state)
+            touch_was_down = touch_point is not None
+        except Exception as exc:
+            print("Touch read failed:", exc)
+            touch = None
 
     time.sleep_ms(30)

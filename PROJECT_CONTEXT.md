@@ -15,11 +15,11 @@ The repository also contains an ESP-IDF board support package under `reference/e
 
 ## Current status
 
-- **Implemented (source):** MicroPython ILI9341 SPI driver and graphics primitives; virtual horizon with pitch/roll readouts, pitch ladder, and camper marker; BLE client, notification setup attempt, and fixed-format packet decoder. `main.py` swaps decoded X/roll and Y/pitch for displayed vehicle axes based on the owner's reported sensor movement; signs remain to be checked. `ble_scan.py` remains a standalone discovery diagnostic.
+- **Implemented (source):** MicroPython ILI9341 SPI driver and graphics primitives; two touch-selectable pages (HORIZON virtual horizon and a LEVELLING page with two-wedge and four-corner views); FT5x06-compatible I2C touch reader based on reference BSP wiring; BLE client, battery percentage poll, notification setup attempt, and fixed-format packet decoder. `main.py` swaps decoded X/roll and Y/pitch for displayed vehicle axes based on the owner's reported sensor movement; corner-height signs still need validation with the planned centered installation. `ble_scan.py` remains a standalone discovery diagnostic.
 - **Tested:** No tests or hardware validation results are documented for the dashboard integration.
 - **Planned:** confirm the sensor protocol and notification descriptor handling; verify the empirically swapped vehicle axis mapping, signs, and display scaling against the installed sensor.
-- **Unverified:** exact physical board variant, deployed firmware, dashboard rendering on the current device, BLE GATT details, sensor packet assumptions/scales, and physical angle conventions.
+- **Unverified:** exact physical board variant, deployed firmware, touchscreen controller/pin mapping and coordinate orientation, dashboard rendering on the current device, BLE GATT details, sensor packet assumptions/scales, and physical angle conventions.
 
 ## Important constraints
 
-Do not claim hardware operation has been verified. Do not treat features in the reference BSP (touch, LVGL, audio, storage, etc.) as application features. Consult `docs/architecture.md`, `docs/hardware.md`, and `docs/decisions.md` before making assumptions.
+Do not claim touchscreen hardware operation has been verified. Touch code is now present in the MicroPython application, using controller and pin details drawn from the reference BSP; test the active wiring before treating it as confirmed. Do not treat other features in the reference BSP (LVGL, audio, storage, etc.) as application features. Consult `docs/architecture.md`, `docs/hardware.md`, and `docs/decisions.md` before making assumptions.

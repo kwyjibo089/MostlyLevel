@@ -13,6 +13,8 @@ This document records choices visible in the current implementation separately f
 | Swap the sensor's decoded X/roll and Y/pitch channels for vehicle display axes | Implemented in `src/main.py` after the owner reported front lift affecting horizon tilt and left lift appearing as positive pitch. This empirical mapping and its signs still need validation. |
 | Connect to the sensor over BLE using the configured address and UUIDs | Implemented in `src/ble_read.py`; GATT and packet assumptions still require confirmation from live captures. |
 | Read and display sensor battery percentage | `src/main.py` requests register `0x64` every 60 seconds while live and shows the latest percentage beside `LIVE`. Voltage percentage bands come from a related WT9011DCL-BT50 protocol table. On the owner's unit, raw 385 (3.85 V) matched the Android app's 60%; other levels on this exact model remain unverified. |
+| Add touch navigation between pages | `src/main.py` draws `HORIZON` and `LEVELLING` buttons; `src/touch.py` reads an FT5x06-compatible controller using the separate reference BSP's I2C/reset pins. The levelling page toggles between the two largest estimated lift needs and all four corner values. Physical touch operation and orientation remain unverified. |
+| Estimate corner lift heights from pitch and roll | Use owner-provided 4,035 mm wheelbase and 1,810/1,790 mm front/rear track widths. The current formula assumes sensor position at the wheel-footprint center, positive pitch means front-high, and positive roll means left-high; lift values raise each lower corner to the highest corner. Validate these assumptions after installation.
 | Keep the ESP-IDF BSP as reference material | Structural fact: it is nested under `reference/` and is not part of the MicroPython import path or a top-level build. Treating it as non-active is a documentation convention, not proof of long-term intent. |
 
 ## Dashboard integration update
@@ -37,5 +39,6 @@ The display uses a virtual horizon with pitch/roll readouts, a pitch ladder, and
 5. Should the app reconnect automatically and how should it show stale/missing sensor data?
 6. What hardware test procedure and acceptance criteria define a working display and accurate levelling readout?
 7. Does the related-model voltage-to-percentage table accurately represent the battery level throughout the operating range of this exact sensor? Compare more readings with the Android app.
+8. Does the active board use the FT5x06 controller and reference BSP touch pin mapping (I2C GPIO 15/16, reset GPIO 18), and do raw touch coordinates match display coordinates?
 
 No unresolved question should be filled in by guessing; capture hardware observations or obtain project-owner direction and record the result here or in `hardware.md`.

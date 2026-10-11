@@ -4,6 +4,10 @@ Notable project changes are recorded here. This file was introduced with the ini
 
 ## Unreleased
 
+- Updated the README screenshot gallery with the HORIZON, 4 CORNERS, and 2 WEDGES screens.
+- Renamed the first touchscreen page button from `LEVEL` to `HORIZON` to describe its virtual-horizon display.
+- Added a touch-selectable second page that ranks the estimated wheel-corner lift heights and shows the two largest for a two-wedge setup. Values use pitch, roll, wheelbase, and front/rear track width. The FT5x06-compatible touch reader uses reference board wiring; physical touch behavior and corner-height sign assumptions remain unverified.
+- Added a `4 CORNERS` view alongside `2 WEDGES` on the `LEVELLING` page, with touch tabs; `2 WEDGES` remains the default.
 - Added an automatic battery percentage read every 60 seconds and display beside `LIVE` in the top bar. The 385 (3.85 V) reading maps to 60% using a related WT9011DCL-BT50 voltage table and matched the Android app on the connected unit.
 - Removed the compass and expanded the virtual horizon to occupy the display area below the status and pitch/roll readout bars.
 - Swapped decoded pitch/roll channels at the display boundary to match the owner's reported sensor movement; signs still need hardware confirmation.

@@ -2,15 +2,33 @@
 
 MostlyLevel is a campervan levelling system prototype. The MicroPython app draws a pitch-and-roll virtual horizon on an ILI9341 display using notifications from a WT901BLE67-like sensor. The BLE decoder also provides yaw, but the display does not use it.
 
-## Dashboard screenshot
+## Screenshots
 
-![MostlyLevel virtual horizon dashboard](assets/screenshot.png)
+### HORIZON
+
+![HORIZON screen with the virtual horizon and pitch and roll readouts](assets/screenshot1.png)
+
+The main screen shows the live virtual horizon, vehicle attitude, and sensor connection and battery status.
+
+### LEVELLING — 4 CORNERS
+
+![LEVELLING screen showing estimated lift heights for all four corners](assets/screenshot2.png)
+
+This view shows the estimated lift height at each wheel corner.
+
+### LEVELLING — 2 WEDGES
+
+![LEVELLING screen showing the two corners with the largest lift estimates](assets/screenshot3.png)
+
+This view ranks the two corners with the largest estimated lift amounts for a two-wedge setup.
 
 ## Current status
 
-- `src/main.py` draws a virtual horizon with pitch/roll readouts, a pitch ladder, a fixed camper marker, and the latest sensor battery percentage in the top bar beside the BLE status.
-- The display uses decoded pitch and roll from the WT901 BLE client and redraws the readouts and horizon when either changes by at least 0.2°. The status header redraws at startup or when connection status changes. Yaw is not displayed.
+- `src/main.py` provides two touch-selectable pages: **HORIZON** for the virtual horizon dashboard and **LEVELLING** for the corner lift estimates. The levelling page has **2 WEDGES** and **4 CORNERS** views; the two-wedge view is selected by default. The top bar shows the latest sensor battery percentage beside the BLE status.
+- The display uses decoded pitch and roll from the WT901 BLE client and redraws the readouts and horizon when either changes by at least 0.2°. The status header redraws at startup or when connection or battery status changes. Yaw is not displayed.
 - Dashboard operation and BLE connection/notification behavior remain unverified. An initial LCD memory-read screenshot attempt returned all-zero pixels; the replacement software-rendered screenshot path has not yet been tested on hardware. Protocol assumptions, physical board variant, and installed firmware also remain unverified.
+
+The **2 WEDGES** view ranks wheel corners by estimated lift and shows the two largest amounts. The **4 CORNERS** view shows all four estimates. Both use the owner-provided 4,035 mm wheelbase and 1,810/1,790 mm front/rear track widths with live vehicle pitch and roll. The calculation assumes the sensor is mounted level with the chassis at the midpoint of the wheelbase and track, positive pitch means front-high, and positive roll means left-high. These are geometric estimates; after placing wedges, recheck the live readings and adjust as needed. Verify the signs and estimates on the installed van before relying on them.
 
 ## Repository layout
 
@@ -19,6 +37,7 @@ MostlyLevel is a campervan levelling system prototype. The MicroPython app draws
 - `src/graphics.py` — drawing helpers and bitmap font.
 - `src/screenshot.py` — temporary framebuffer adapter and BMP writer used for screenshots.
 - `src/ble_read.py` — BLE client and packet decoder used by the dashboard; it can also run as a serial diagnostic.
+- `src/touch.py` — minimal FT5x06 I2C touchscreen reader for the reference board wiring.
 - `src/ble_scan.py` — standalone BLE discovery diagnostic; not used by the application.
 - `firmware/` — ESP32_GENERIC_S3 MicroPython firmware image.
 - `reference/esp32_s3_es3c28p/` — separate ESP-IDF board support reference; it is not integrated with the MicroPython application.
@@ -52,6 +71,7 @@ Copy the application and its imported modules to the board's filesystem root:
 .venv/bin/mpremote connect auto fs cp src/ili9341.py :ili9341.py
 .venv/bin/mpremote connect auto fs cp src/graphics.py :graphics.py
 .venv/bin/mpremote connect auto fs cp src/ble_read.py :ble_read.py
+.venv/bin/mpremote connect auto fs cp src/touch.py :touch.py
 .venv/bin/mpremote connect auto fs cp src/screenshot.py :screenshot.py
 ```
 
