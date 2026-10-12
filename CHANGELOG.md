@@ -4,6 +4,8 @@ Notable project changes are recorded here. This file was introduced with the ini
 
 ## Unreleased
 
+- Added a thicker green frame around the HORIZON display region when live pitch and roll are both within ±0.5°; inset the pitch/roll readout boxes with clear spacing. The threshold is configurable.
+- Added `src/config.py` for sensor identity/protocol settings, sensor axis mapping and scaling, vehicle geometry, display timing, and LCD/touch wiring; updated the client, scanner, and drivers to use it.
 - Updated the README screenshot gallery with the HORIZON, 4 CORNERS, and 2 WEDGES screens.
 - Renamed the first touchscreen page button from `LEVEL` to `HORIZON` to describe its virtual-horizon display.
 - Added a touch-selectable second page that ranks the estimated wheel-corner lift heights and shows the two largest for a two-wedge setup. Values use pitch, roll, wheelbase, and front/rear track width. The FT5x06-compatible touch reader uses reference board wiring; physical touch behavior and corner-height sign assumptions remain unverified.

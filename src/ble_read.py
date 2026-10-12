@@ -1,8 +1,24 @@
 import bluetooth
 import time
-
-
-TARGET_MAC = bytes.fromhex("F0A07ADB7D45")
+from config import (
+    SENSOR_ACCEL_RANGE_G,
+    SENSOR_ANGLE_RANGE_DEG,
+    SENSOR_ATTITUDE_PACKET_LENGTH,
+    SENSOR_ATTITUDE_PACKET_TYPE,
+    SENSOR_BATTERY_PERCENT_BANDS,
+    SENSOR_CCCD_HANDLE,
+    SENSOR_GYRO_RANGE_DPS,
+    SENSOR_MAC,
+    SENSOR_NAME,
+    SENSOR_NOTIFY_UUID,
+    SENSOR_PACKET_HEADER,
+    SENSOR_POWER_READ_COMMAND,
+    SENSOR_POWER_REGISTER,
+    SENSOR_POWER_VOLTAGE_DIVISOR,
+    SENSOR_RAW_FULL_SCALE,
+    SENSOR_REGISTER_PACKET_TYPE,
+    SENSOR_WRITE_UUID,
+)
 
 _IRQ_SCAN_RESULT = 5
 _IRQ_SCAN_DONE = 6
@@ -15,13 +31,9 @@ _IRQ_GATTC_CHARACTERISTIC_DONE = 12
 _IRQ_GATTC_WRITE_DONE = 17
 _IRQ_GATTC_NOTIFY = 18
 
-WRITE_UUID_STR = "0000ffe9-0000-1000-8000-00805f9a34fb"
-NOTIFY_UUID_STR = "0000ffe4-0000-1000-8000-00805f9a34fb"
-POWER_READ_COMMAND = b"\xff\xaa\x27\x64\x00"
-
 # Kept from the existing sensor reader. This descriptor handle still needs
 # confirmation against a recorded GATT discovery on the actual sensor.
-CCCD_HANDLE_CANDIDATE = 16
+CCCD_HANDLE_CANDIDATE = SENSOR_CCCD_HANDLE
 
 
 def format_address(addr):
@@ -63,35 +75,20 @@ def format_hex(data):
 
 
 def battery_percent(raw):
-    """Map register hundredths-of-a-volt using the related WT9011DCL table."""
-    if raw > 396:
-        return 100
-    if raw >= 393:
-        return 90
-    if raw >= 387:
-        return 75
-    if raw >= 382:
-        return 60
-    if raw >= 379:
-        return 50
-    if raw >= 377:
-        return 40
-    if raw >= 373:
-        return 30
-    if raw >= 370:
-        return 20
-    if raw >= 368:
-        return 15
-    if raw >= 350:
-        return 10
-    if raw >= 340:
-        return 5
+    """Map battery register voltage using configured model-specific bands."""
+    for minimum_raw, percent in SENSOR_BATTERY_PERCENT_BANDS:
+        if raw >= minimum_raw:
+            return percent
     return 0
 
 
 def decode_packet(packet):
-    """Decode the 20-byte 0x61 notification format used by the old reader."""
-    if len(packet) != 20 or packet[0] != 0x55 or packet[1] != 0x61:
+    """Decode the configured fixed-length attitude notification packet."""
+    if (
+        len(packet) != SENSOR_ATTITUDE_PACKET_LENGTH
+        or packet[0] != SENSOR_PACKET_HEADER
+        or packet[1] != SENSOR_ATTITUDE_PACKET_TYPE
+    ):
         return None
 
     raw = []
@@ -103,23 +100,22 @@ def decode_packet(packet):
     roll, pitch, yaw = raw[6:9]
 
     return {
-        "acc_x": ax * 16.0 / 32768.0,
-        "acc_y": ay * 16.0 / 32768.0,
-        "acc_z": az * 16.0 / 32768.0,
-        "gyro_x": gx * 2000.0 / 32768.0,
-        "gyro_y": gy * 2000.0 / 32768.0,
-        "gyro_z": gz * 2000.0 / 32768.0,
-        "roll": roll * 180.0 / 32768.0,
-        "pitch": pitch * 180.0 / 32768.0,
-        "yaw": yaw * 180.0 / 32768.0,
+        "acc_x": ax * SENSOR_ACCEL_RANGE_G / SENSOR_RAW_FULL_SCALE,
+        "acc_y": ay * SENSOR_ACCEL_RANGE_G / SENSOR_RAW_FULL_SCALE,
+        "acc_z": az * SENSOR_ACCEL_RANGE_G / SENSOR_RAW_FULL_SCALE,
+        "gyro_x": gx * SENSOR_GYRO_RANGE_DPS / SENSOR_RAW_FULL_SCALE,
+        "gyro_y": gy * SENSOR_GYRO_RANGE_DPS / SENSOR_RAW_FULL_SCALE,
+        "gyro_z": gz * SENSOR_GYRO_RANGE_DPS / SENSOR_RAW_FULL_SCALE,
+        "roll": roll * SENSOR_ANGLE_RANGE_DEG / SENSOR_RAW_FULL_SCALE,
+        "pitch": pitch * SENSOR_ANGLE_RANGE_DEG / SENSOR_RAW_FULL_SCALE,
+        "yaw": yaw * SENSOR_ANGLE_RANGE_DEG / SENSOR_RAW_FULL_SCALE,
     }
 
 
 def print_measurements(values):
     print(
-        "WT901BLE67 P:{:+.2f} R:{:+.2f} Y:{:+.2f}".format(
-            values["pitch"], values["roll"], values["yaw"]
-        )
+        "%s P:{:+.2f} R:{:+.2f} Y:{:+.2f}"
+        % (SENSOR_NAME, values["pitch"], values["roll"], values["yaw"])
     )
 
 
@@ -157,7 +153,7 @@ class WT901BLEClient:
         self.write_handle = None
         self.connected = False
         self.state = "SCANNING"
-        print("Scanning for WT901BLE67:", format_address(TARGET_MAC))
+        print("Scanning for %s:" % SENSOR_NAME, format_address(SENSOR_MAC))
 
         try:
             self.ble.gap_scan(15000, 30000, 30000, True)
@@ -198,17 +194,20 @@ class WT901BLEClient:
         self.ble.gattc_write(
             self.conn_handle,
             self.write_handle,
-            POWER_READ_COMMAND,
+            SENSOR_POWER_READ_COMMAND,
             1,
         )
-        print("Requested power register 0x64; waiting for sensor response.")
+        print(
+            "Requested power register 0x%02X; waiting for sensor response."
+            % SENSOR_POWER_REGISTER
+        )
 
     def _irq(self, event, data):
         if event == _IRQ_SCAN_RESULT:
             addr_type, addr, adv_type, rssi, adv_data = data
 
-            if bytes(addr) == TARGET_MAC and not self.connected:
-                print("Found WT901BLE67", format_address(addr), "RSSI", rssi)
+            if bytes(addr) == SENSOR_MAC and not self.connected:
+                print("Found", SENSOR_NAME, format_address(addr), "RSSI", rssi)
                 self.state = "CONNECTING"
                 try:
                     self.ble.gap_scan(None)
@@ -227,7 +226,7 @@ class WT901BLEClient:
             self.conn_handle, addr_type, addr = data
             self.connected = True
             self.state = "DISCOVERING"
-            print("Connected to WT901BLE67.")
+            print("Connected to %s." % SENSOR_NAME)
             try:
                 self.ble.gattc_discover_services(self.conn_handle)
             except Exception as exc:
@@ -263,9 +262,9 @@ class WT901BLEClient:
             uuid_str = normalize_uuid(uuid)
             print("Characteristic:", uuid_str, "handle:", value_handle)
 
-            if uuid_str == NOTIFY_UUID_STR:
+            if uuid_str == SENSOR_NOTIFY_UUID:
                 self.notify_handle = value_handle
-            elif uuid_str == WRITE_UUID_STR:
+            elif uuid_str == SENSOR_WRITE_UUID:
                 self.write_handle = value_handle
 
         elif event == _IRQ_GATTC_CHARACTERISTIC_DONE:
@@ -291,14 +290,18 @@ class WT901BLEClient:
                 return
 
             packet = bytes(notify_data)
-            if len(packet) >= 4 and packet[0] == 0x55 and packet[1] == 0x71:
+            if (
+                len(packet) >= 4
+                and packet[0] == SENSOR_PACKET_HEADER
+                and packet[1] == SENSOR_REGISTER_PACKET_TYPE
+            ):
                 self.last_power_response = packet
                 print("Sensor register response:", format_hex(packet))
 
                 start_register = packet[2] | (packet[3] << 8)
-                if start_register == 0x64 and len(packet) >= 6:
+                if start_register == SENSOR_POWER_REGISTER and len(packet) >= 6:
                     self.power_raw = packet[4] | (packet[5] << 8)
-                    self.power_voltage = self.power_raw / 100.0
+                    self.power_voltage = self.power_raw / SENSOR_POWER_VOLTAGE_DIVISOR
                     self.power_percent = battery_percent(self.power_raw)
                     print(
                         "Sensor battery: %d%% (%.2f V, raw %d)"

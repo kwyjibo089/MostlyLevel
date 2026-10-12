@@ -2,6 +2,22 @@ from ili9341 import ILI9341
 from graphics import Graphics, BLACK, WHITE, CYAN, YELLOW, GREEN, GREY
 from ble_read import WT901BLEClient
 from touch import TouchInput
+from config import (
+    ATTITUDE_REDRAW_THRESHOLD_DEG,
+    BATTERY_POLL_INTERVAL_MS,
+    DISPLAY_PITCH_SENSOR_KEY,
+    DISPLAY_PITCH_SIGN,
+    DISPLAY_ROLL_SENSOR_KEY,
+    DISPLAY_ROLL_SIGN,
+    FRONT_TRACK_MM,
+    LEVEL_FRAME_THRESHOLD_DEG,
+    NO_WEDGE_NEEDED_THRESHOLD_CM,
+    PITCH_PIXELS_PER_DEGREE,
+    REAR_TRACK_MM,
+    RENDER_INTERVAL_MS,
+    SENSOR_STALE_MS,
+    WHEELBASE_MM,
+)
 
 import math
 import time
@@ -24,16 +40,6 @@ HORIZON_TOP = 40
 HORIZON_BOTTOM = HEIGHT - 1
 HORIZON_CENTER_X = WIDTH // 2
 HORIZON_CENTER_Y = (HORIZON_TOP + HORIZON_BOTTOM) // 2
-PITCH_PIXELS_PER_DEGREE = 1.8
-RENDER_INTERVAL_MS = 250
-ATTITUDE_REDRAW_THRESHOLD_DEG = 0.2
-SENSOR_STALE_MS = 1500
-BATTERY_POLL_INTERVAL_MS = 60000
-WHEELBASE_MM = 4035.0
-FRONT_TRACK_MM = 1810.0
-REAR_TRACK_MM = 1790.0
-
-
 print("Starting MostlyLevel dashboard")
 
 lcd = ILI9341()
@@ -178,7 +184,7 @@ def draw_corner_heights(values):
 
     ranked = sorted(heights.items(), key=lambda item: item[1], reverse=True)
     if corner_view == 0:
-        if ranked[0][1] < 0.5:
+        if ranked[0][1] < NO_WEDGE_NEEDED_THRESHOLD_CM:
             g.text(69, 157, "NO WEDGES NEEDED", GREEN)
             g.text(62, 178, "VAN IS LEVEL", WHITE)
             return
@@ -194,11 +200,30 @@ def draw_corner_heights(values):
 def draw_readouts(values):
     box_height = 36
     box_y = HEIGHT - box_height - 8
+    box_width = 108
+    pitch_x = 10
+    roll_x = WIDTH - pitch_x - box_width
 
-    g.fill_rect(5, box_y, 112, box_height, PILL)
-    g.fill_rect(123, box_y, 112, box_height, PILL)
-    g.text(9, box_y + 10, "P " + angle_text(values, "pitch") + "°", WHITE, scale=2)
-    g.text(127, box_y + 10, "R " + angle_text(values, "roll") + "°", WHITE, scale=2)
+    g.fill_rect(pitch_x, box_y, box_width, box_height, PILL)
+    g.fill_rect(roll_x, box_y, box_width, box_height, PILL)
+    g.text(pitch_x + 4, box_y + 10, "P " + angle_text(values, "pitch") + "°", WHITE, scale=2)
+    g.text(roll_x + 4, box_y + 10, "R " + angle_text(values, "roll") + "°", WHITE, scale=2)
+
+
+def is_level(pitch, roll):
+    return (
+        abs(pitch) <= LEVEL_FRAME_THRESHOLD_DEG
+        and abs(roll) <= LEVEL_FRAME_THRESHOLD_DEG
+    )
+
+
+def draw_level_frame():
+    """Outline the horizon area when both vehicle axes are within tolerance."""
+    thickness = 4
+    g.fill_rect(0, HORIZON_TOP, WIDTH, thickness, GREEN)
+    g.fill_rect(0, HEIGHT - thickness, WIDTH, thickness, GREEN)
+    g.fill_rect(0, HORIZON_TOP, thickness, HEIGHT - HORIZON_TOP, GREEN)
+    g.fill_rect(WIDTH - thickness, HORIZON_TOP, thickness, HEIGHT - HORIZON_TOP, GREEN)
 
 
 def horizon_y(x, pitch_deg, roll_slope):
@@ -341,8 +366,8 @@ def vehicle_values(values):
     if values is None:
         return None, 0.0, 0.0
 
-    pitch = values["roll"]
-    roll = values["pitch"]
+    pitch = values[DISPLAY_PITCH_SENSOR_KEY] * DISPLAY_PITCH_SIGN
+    roll = values[DISPLAY_ROLL_SENSOR_KEY] * DISPLAY_ROLL_SIGN
     display_values = {
         "pitch": pitch,
         "roll": roll,
@@ -368,6 +393,8 @@ def draw_dashboard(values, state):
         display_values, pitch, roll = vehicle_values(values)
         draw_horizon(pitch, roll)
         draw_readouts(display_values)
+        if state == "LIVE" and display_values is not None and is_level(pitch, roll):
+            draw_level_frame()
     else:
         draw_corner_heights(values)
 
@@ -442,6 +469,7 @@ sensor.start()
 
 last_state = None
 last_attitude = None
+last_level = None
 last_render_ms = 0
 screen_initialized = False
 last_battery_request_ms = None
@@ -478,6 +506,11 @@ while True:
         screen_initialized = True
         last_state = state
         last_attitude = attitude if sensor.latest is not None else None
+        last_level = (
+            state == "LIVE"
+            and sensor.latest is not None
+            and is_level(pitch, roll)
+        )
         last_render_ms = time.ticks_ms()
     else:
         if state != last_state or sensor.power_percent != last_battery_percent:
@@ -485,16 +518,26 @@ while True:
             last_state = state
             last_battery_percent = sensor.power_percent
 
-        if sensor.latest is not None and attitude_changed(attitude, last_attitude) and (
+        level_now = (
+            state == "LIVE"
+            and sensor.latest is not None
+            and is_level(pitch, roll)
+        )
+        if sensor.latest is not None and (
+            attitude_changed(attitude, last_attitude) or level_now != last_level
+        ) and (
             last_render_ms == 0
             or time.ticks_diff(now, last_render_ms) >= RENDER_INTERVAL_MS
         ):
             if active_screen == 0:
                 draw_horizon(pitch, roll)
                 draw_readouts(display_values)
+                if level_now:
+                    draw_level_frame()
             else:
                 draw_corner_heights(sensor.latest)
             last_attitude = attitude
+            last_level = level_now
             last_render_ms = time.ticks_ms()
 
     if touch is not None:

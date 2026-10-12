@@ -10,6 +10,10 @@ MostlyLevel is a campervan levelling system prototype. The MicroPython app draws
 
 The main screen shows the live virtual horizon, vehicle attitude, and sensor connection and battery status.
 
+![HORIZON screen with a green frame when the camper is level](assets/screenshot.png)
+
+The green frame appears when both pitch and roll are within ±0.5°.
+
 ### LEVELLING — 4 CORNERS
 
 ![LEVELLING screen showing estimated lift heights for all four corners](assets/screenshot2.png)
@@ -26,6 +30,7 @@ This view ranks the two corners with the largest estimated lift amounts for a tw
 
 - `src/main.py` provides two touch-selectable pages: **HORIZON** for the virtual horizon dashboard and **LEVELLING** for the corner lift estimates. The levelling page has **2 WEDGES** and **4 CORNERS** views; the two-wedge view is selected by default. The top bar shows the latest sensor battery percentage beside the BLE status.
 - The display uses decoded pitch and roll from the WT901 BLE client and redraws the readouts and horizon when either changes by at least 0.2°. The status header redraws at startup or when connection or battery status changes. Yaw is not displayed.
+- On the HORIZON page, a green frame appears when live pitch and roll are both within ±0.5°. The threshold is configurable in `src/config.py`; this visual behavior has not yet been verified on hardware.
 - Dashboard operation and BLE connection/notification behavior remain unverified. An initial LCD memory-read screenshot attempt returned all-zero pixels; the replacement software-rendered screenshot path has not yet been tested on hardware. Protocol assumptions, physical board variant, and installed firmware also remain unverified.
 
 The **2 WEDGES** view ranks wheel corners by estimated lift and shows the two largest amounts. The **4 CORNERS** view shows all four estimates. Both use the owner-provided 4,035 mm wheelbase and 1,810/1,790 mm front/rear track widths with live vehicle pitch and roll. The calculation assumes the sensor is mounted level with the chassis at the midpoint of the wheelbase and track, positive pitch means front-high, and positive roll means left-high. These are geometric estimates; after placing wedges, recheck the live readings and adjust as needed. Verify the signs and estimates on the installed van before relying on them.
@@ -37,6 +42,7 @@ The **2 WEDGES** view ranks wheel corners by estimated lift and shows the two la
 - `src/graphics.py` — drawing helpers and bitmap font.
 - `src/screenshot.py` — temporary framebuffer adapter and BMP writer used for screenshots.
 - `src/ble_read.py` — BLE client and packet decoder used by the dashboard; it can also run as a serial diagnostic.
+- `src/config.py` — editable sensor, vehicle geometry, display, touch, and timing settings.
 - `src/touch.py` — minimal FT5x06 I2C touchscreen reader for the reference board wiring.
 - `src/ble_scan.py` — standalone BLE discovery diagnostic; not used by the application.
 - `firmware/` — ESP32_GENERIC_S3 MicroPython firmware image.
@@ -67,6 +73,7 @@ Connect the ESP32 over USB and check that it is detected:
 Copy the application and its imported modules to the board's filesystem root:
 
 ```bash
+.venv/bin/mpremote connect auto fs cp src/config.py :config.py
 .venv/bin/mpremote connect auto fs cp src/main.py :main.py
 .venv/bin/mpremote connect auto fs cp src/ili9341.py :ili9341.py
 .venv/bin/mpremote connect auto fs cp src/graphics.py :graphics.py
@@ -76,6 +83,10 @@ Copy the application and its imported modules to the board's filesystem root:
 ```
 
 The files belong in the root because `main.py` imports the modules by name. `ble_scan.py` is a separate discovery diagnostic and is not needed to run the dashboard.
+
+### Configuration
+
+Edit `src/config.py` for the sensor MAC address, GATT UUIDs and notification handle, packet scaling and battery percentage bands, sensor-to-vehicle axis mapping and signs, van geometry, display timing, and LCD/touch pin assignments. The MAC is written as 12 hexadecimal digits without colons. Keep the ESP32's `config.py` in sync when uploading changes. Some values, including the CCCD handle and sensor axis/sign assumptions, remain unverified and should only be changed based on hardware checks.
 
 After copying, power-cycle the board. MicroPython runs the board's `main.py` at startup. To open the serial REPL and inspect output or errors, run:
 
@@ -92,6 +103,7 @@ The dashboard requests the sensor power register after BLE becomes live and then
 To use the dashboard battery display, upload the updated `main.py` and `ble_read.py` to the board, then restart it. To inspect the reading manually, upload the updated BLE client, connect the dashboard to the sensor, then open the REPL and interrupt the app with Ctrl+C:
 
 ```bash
+.venv/bin/mpremote connect auto fs cp src/config.py :config.py
 .venv/bin/mpremote connect auto fs cp src/ble_read.py :ble_read.py
 .venv/bin/mpremote connect auto fs cp src/main.py :main.py
 .venv/bin/mpremote connect auto repl

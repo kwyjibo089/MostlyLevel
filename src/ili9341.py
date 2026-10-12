@@ -1,5 +1,15 @@
 from machine import Pin, SPI
 import time
+from config import (
+    LCD_BACKLIGHT_PIN,
+    LCD_CS_PIN,
+    LCD_DC_PIN,
+    LCD_SPI_BAUDRATE,
+    LCD_SPI_ID,
+    LCD_SPI_MISO_PIN,
+    LCD_SPI_MOSI_PIN,
+    LCD_SPI_SCK_PIN,
+)
 
 
 class ILI9341:
@@ -8,18 +18,18 @@ class ILI9341:
 
     def __init__(self):
         # Display connections for the ES3C28P board
-        self.cs = Pin(10, Pin.OUT, value=1)
-        self.dc = Pin(46, Pin.OUT, value=1)
-        self.bl = Pin(45, Pin.OUT, value=1)
+        self.cs = Pin(LCD_CS_PIN, Pin.OUT, value=1)
+        self.dc = Pin(LCD_DC_PIN, Pin.OUT, value=1)
+        self.bl = Pin(LCD_BACKLIGHT_PIN, Pin.OUT, value=1)
 
         self.spi = SPI(
-            2,
-            baudrate=20_000_000,
+            LCD_SPI_ID,
+            baudrate=LCD_SPI_BAUDRATE,
             polarity=0,
             phase=0,
-            sck=Pin(12),
-            mosi=Pin(11),
-            miso=Pin(13),
+            sck=Pin(LCD_SPI_SCK_PIN),
+            mosi=Pin(LCD_SPI_MOSI_PIN),
+            miso=Pin(LCD_SPI_MISO_PIN),
         )
 
         self._init_display()

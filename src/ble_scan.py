@@ -1,7 +1,6 @@
 import bluetooth
 import time
-
-TARGET_MAC = bytes.fromhex("F0A07ADB7D45")
+from config import SENSOR_MAC
 
 # MicroPython BLE IRQ event constants
 _IRQ_SCAN_RESULT = 5
@@ -66,7 +65,7 @@ def on_ble_event(event, data):
     if event == _IRQ_SCAN_RESULT:
         addr_type, addr, adv_type, rssi, adv_data = data
 
-        if bytes(addr) == TARGET_MAC and not connected:
+        if bytes(addr) == SENSOR_MAC and not connected:
             print("\n*** WT901BLE SENSOR FOUND ***")
             print("Address:", format_address(addr))
             print("Address type:", addr_type)
