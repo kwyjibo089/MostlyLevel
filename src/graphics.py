@@ -91,17 +91,24 @@ class Graphics:
                 cursor_x += 6 * scale
                 continue
 
-            for col, bits in enumerate(glyph):
-                for row in range(8):
-                    if bits & (1 << row):
-                        px = cursor_x + col * scale
-                        py = y + row * scale
+            for row in range(8):
+                col = 0
+                while col < len(glyph):
+                    if not glyph[col] & (1 << row):
+                        col += 1
+                        continue
 
-                        if scale == 1:
-                            self.pixel(px, py, colour)
-                        else:
-                            self.fill_rect(
-                                px, py, scale, scale, colour
-                            )
+                    run_start = col
+                    col += 1
+                    while col < len(glyph) and glyph[col] & (1 << row):
+                        col += 1
+
+                    self.fill_rect(
+                        cursor_x + run_start * scale,
+                        y + row * scale,
+                        (col - run_start) * scale,
+                        scale,
+                        colour,
+                    )
 
             cursor_x += 6 * scale

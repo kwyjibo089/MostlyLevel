@@ -32,6 +32,8 @@ The firmware directory contains `ESP32_GENERIC_S3-20260824-v1.29.0.bin`. This is
 
 The owner tested `sensor.request_power_read()` against the connected unit. It returned `55 71 64 00 81 01 ... E8 03`; the diagnostic decoded the power value `0x0181` (385) as 3.85 V. The Android app showed 60% at the same time. The dashboard now polls this register once per minute and shows a percentage in the top bar. Percentage bands are taken from a related WT9011DCL-BT50 protocol table; 385 maps to 60%, matching the one reported app observation. Other battery levels on this exact unit have not been checked.
 
+The HORIZON screen provides a rounded yellow `CALIBRATE` button in the upper-right above the arc that saves pitch/roll offsets to `/level_reference.cfg` on the ESP32. The intended procedure is to level the van using a trusted reference before tapping the button. This file persistence and the calibration result have not yet been checked on the physical device.
+
 ## Tested versus unverified
 
 No wiring inspection, board identification record, discovery transcript, or formal hardware test report is checked in; the owner has provided live observations including the power response above. The owner reports that lifting the front changes the displayed horizon tilt, while lifting the left side produces positive displayed pitch. In response, `main.py` currently swaps the decoded X/roll and Y/pitch channels for vehicle display pitch/roll. This is an empirical mapping based on those observations; signs, mounting orientation, and level calibration still need confirmation. Yaw is decoded but not displayed. Do not infer power supply, connector, mounting, or other wiring details from the current files.

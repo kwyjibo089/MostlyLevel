@@ -4,6 +4,7 @@ Notable project changes are recorded here. This file was introduced with the ini
 
 ## Unreleased
 
+- Added a persistent level-reference calibration action on the HORIZON screen, a prominent red warning for unavailable sensor data, and separate 0.5°/0.7° level-frame on/off thresholds. Styled `CALIBRATE` as a rounded yellow button in the upper-right above the horizon arc. Grouped repeated horizon and ladder drawing operations, batched LCD address-window commands, and rasterized text in horizontal runs to reduce redraw flicker; hardware speedup remains to be measured.
 - Added a thicker green frame around the HORIZON display region when live pitch and roll are both within ±0.5°; inset the pitch/roll readout boxes with clear spacing. The threshold is configurable.
 - Added `src/config.py` for sensor identity/protocol settings, sensor axis mapping and scaling, vehicle geometry, display timing, and LCD/touch wiring; updated the client, scanner, and drivers to use it.
 - Updated the README screenshot gallery with the HORIZON, 4 CORNERS, and 2 WEDGES screens.

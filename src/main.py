@@ -1,5 +1,5 @@
 from ili9341 import ILI9341
-from graphics import Graphics, BLACK, WHITE, CYAN, YELLOW, GREEN, GREY
+from graphics import Graphics, BLACK, WHITE, CYAN, YELLOW, GREEN, GREY, RED
 from ble_read import WT901BLEClient
 from touch import TouchInput
 from config import (
@@ -10,6 +10,7 @@ from config import (
     DISPLAY_ROLL_SENSOR_KEY,
     DISPLAY_ROLL_SIGN,
     FRONT_TRACK_MM,
+    LEVEL_FRAME_RELEASE_THRESHOLD_DEG,
     LEVEL_FRAME_THRESHOLD_DEG,
     NO_WEDGE_NEEDED_THRESHOLD_CM,
     PITCH_PIXELS_PER_DEGREE,
@@ -55,6 +56,21 @@ except Exception as exc:
 
 active_screen = 0
 corner_view = 0
+LEVEL_REFERENCE_FILE = "/level_reference.cfg"
+
+
+def load_level_reference():
+    try:
+        with open(LEVEL_REFERENCE_FILE, "r") as reference_file:
+            pitch_offset = float(reference_file.readline())
+            roll_offset = float(reference_file.readline())
+        return pitch_offset, roll_offset
+    except (OSError, ValueError):
+        return 0.0, 0.0
+
+
+pitch_zero, roll_zero = load_level_reference()
+level_frame_active = False
 
 
 def clamp(value, low, high):
@@ -94,13 +110,62 @@ def draw_header(state):
 
 
 def draw_navigation():
-    buttons = ((4, 21, 112, "HORIZON"), (124, 21, 112, "LEVELLING"))
-    for index, (x, y, width, label) in enumerate(buttons):
-        fill = PILL if index == active_screen else DARK
-        edge = CYAN if index == active_screen else GREY
+    buttons = (
+        (4, 21, 112, "HORIZON", active_screen == 0),
+        (124, 21, 112, "LEVELLING", active_screen == 1),
+    )
+    for x, y, width, label, selected in buttons:
+        fill = PILL if selected else DARK
+        edge = CYAN if selected else GREY
         g.fill_rect(x, y, width, 17, fill)
         g.rect(x, y, width, 17, edge)
         g.text(x + (width - len(label) * 6) // 2, y + 5, label, WHITE)
+
+
+
+def draw_calibrate_button():
+    button_x = 140
+    button_y = 50
+    button_width = 88
+    button_height = 18
+    radius = 5
+    g.fill_rect(
+        button_x + radius,
+        button_y,
+        button_width - radius * 2,
+        button_height,
+        YELLOW,
+    )
+    g.fill_rect(
+        button_x,
+        button_y + radius,
+        button_width,
+        button_height - radius * 2,
+        YELLOW,
+    )
+    for row in range(radius):
+        distance = radius - row - 0.5
+        inset = radius - int(math.sqrt(radius * radius - distance * distance))
+        g.fill_rect(
+            button_x + inset,
+            button_y + row,
+            button_width - inset * 2,
+            1,
+            YELLOW,
+        )
+        g.fill_rect(
+            button_x + inset,
+            button_y + button_height - row - 1,
+            button_width - inset * 2,
+            1,
+            YELLOW,
+        )
+    g.text(
+        button_x + (button_width - len("CALIBRATE") * 6) // 2,
+        button_y + 5,
+        "CALIBRATE",
+        BLACK,
+    )
 
 
 def draw_corner_view_tabs():
@@ -210,20 +275,48 @@ def draw_readouts(values):
     g.text(roll_x + 4, box_y + 10, "R " + angle_text(values, "roll") + "°", WHITE, scale=2)
 
 
-def is_level(pitch, roll):
+def is_level(pitch, roll, was_level=False):
+    threshold = (
+        LEVEL_FRAME_RELEASE_THRESHOLD_DEG
+        if was_level
+        else LEVEL_FRAME_THRESHOLD_DEG
+    )
     return (
-        abs(pitch) <= LEVEL_FRAME_THRESHOLD_DEG
-        and abs(roll) <= LEVEL_FRAME_THRESHOLD_DEG
+        abs(pitch) <= threshold
+        and abs(roll) <= threshold
     )
 
 
 def draw_level_frame():
-    """Outline the horizon area when both vehicle axes are within tolerance."""
-    thickness = 4
-    g.fill_rect(0, HORIZON_TOP, WIDTH, thickness, GREEN)
-    g.fill_rect(0, HEIGHT - thickness, WIDTH, thickness, GREEN)
-    g.fill_rect(0, HORIZON_TOP, thickness, HEIGHT - HORIZON_TOP, GREEN)
-    g.fill_rect(WIDTH - thickness, HORIZON_TOP, thickness, HEIGHT - HORIZON_TOP, GREEN)
+    draw_status_frame(GREEN)
+
+
+def draw_status_frame(colour):
+    thickness = 6
+    g.fill_rect(0, HORIZON_TOP, WIDTH, thickness, colour)
+    g.fill_rect(0, HEIGHT - thickness, WIDTH, thickness, colour)
+    g.fill_rect(0, HORIZON_TOP, thickness, HEIGHT - HORIZON_TOP, colour)
+    g.fill_rect(WIDTH - thickness, HORIZON_TOP, thickness, HEIGHT - HORIZON_TOP, colour)
+
+
+def draw_sensor_warning(state, message=None):
+    if message is None:
+        if state == "NO DATA":
+            message = "SENSOR DATA STALE"
+        elif state in ("DISCONNECTED", "ERROR"):
+            message = "SENSOR DISCONNECTED"
+        else:
+            message = "WAITING FOR SENSOR"
+
+    panel_x = 9
+    panel_y = 143
+    panel_width = WIDTH - 18
+    panel_height = 34
+    g.fill_rect(panel_x, panel_y, panel_width, panel_height, DARK)
+    g.rect(panel_x, panel_y, panel_width, panel_height, RED)
+    text_x = (WIDTH - len(message) * 6) // 2
+    g.text(text_x, panel_y + 13, message, YELLOW)
+    draw_status_frame(RED)
 
 
 def horizon_y(x, pitch_deg, roll_slope):
@@ -276,10 +369,22 @@ def draw_ladder(pitch_deg, roll_deg):
             continue
 
         for start_x, end_x in ((73, 103), (137, 167)):
+            run_start = None
+            run_y = None
             for x in range(start_x, end_x, 3):
                 y = int(base_y + roll_slope * (x - HORIZON_CENTER_X))
+                if HORIZON_TOP < y < HORIZON_BOTTOM and y == run_y:
+                    continue
+                if run_start is not None:
+                    g.fill_rect(run_start, run_y, x - run_start, 2, WHITE)
                 if HORIZON_TOP < y < HORIZON_BOTTOM:
-                    g.fill_rect(x, y, 3, 2, WHITE)
+                    run_start = x
+                    run_y = y
+                else:
+                    run_start = None
+                    run_y = None
+            if run_start is not None:
+                g.fill_rect(run_start, run_y, end_x - run_start, 2, WHITE)
 
         label = "%+d" % mark
         label_y = int(base_y - 3)
@@ -342,17 +447,47 @@ def draw_horizon(pitch_deg, roll_deg):
     roll_deg = clamp(roll_deg, -45.0, 45.0)
     roll_slope = math.tan(math.radians(roll_deg))
 
-    # Move the sky/ground boundary with pitch and roll. Positive pitch moves
-    # the horizon down, expanding the blue sky around the fixed vehicle marker.
-    for x in range(0, WIDTH, 4):
-        y = horizon_y(x + 2, pitch_deg, roll_slope)
-        g.fill_rect(x, HORIZON_TOP, 4, y - HORIZON_TOP, SKY)
-        g.fill_rect(x, y, 4, HORIZON_BOTTOM - y + 1, GROUND)
+    # Group adjacent strips with the same boundary height. Near level, this
+    # replaces dozens of tiny SPI windows with only a few wide rectangles.
+    run_x = 0
+    run_y = horizon_y(2, pitch_deg, roll_slope)
+    for x in range(4, WIDTH + 1, 4):
+        next_y = (
+            horizon_y(x + 2, pitch_deg, roll_slope)
+            if x < WIDTH
+            else None
+        )
+        if next_y == run_y:
+            continue
 
-    # Short white segments make the moving horizon line.
-    for x in range(0, WIDTH, 4):
-        y = horizon_y(x + 2, pitch_deg, roll_slope)
-        g.fill_rect(x, y, 4, 1, WHITE)
+        run_width = x - run_x
+        g.fill_rect(run_x, HORIZON_TOP, run_width, run_y - HORIZON_TOP, SKY)
+        g.fill_rect(
+            run_x,
+            run_y,
+            run_width,
+            HORIZON_BOTTOM - run_y + 1,
+            GROUND,
+        )
+        if next_y is not None:
+            run_x = x
+            run_y = next_y
+
+    # Merge adjacent horizontal horizon segments that share the same row.
+    run_x = 0
+    run_y = horizon_y(2, pitch_deg, roll_slope)
+    for x in range(4, WIDTH + 1, 4):
+        next_y = (
+            horizon_y(x + 2, pitch_deg, roll_slope)
+            if x < WIDTH
+            else None
+        )
+        if next_y == run_y:
+            continue
+        g.fill_rect(run_x, run_y, x - run_x, 1, WHITE)
+        if next_y is not None:
+            run_x = x
+            run_y = next_y
 
     draw_pitch_arc()
     draw_ladder(pitch_deg, roll_deg)
@@ -366,8 +501,8 @@ def vehicle_values(values):
     if values is None:
         return None, 0.0, 0.0
 
-    pitch = values[DISPLAY_PITCH_SENSOR_KEY] * DISPLAY_PITCH_SIGN
-    roll = values[DISPLAY_ROLL_SENSOR_KEY] * DISPLAY_ROLL_SIGN
+    pitch = values[DISPLAY_PITCH_SENSOR_KEY] * DISPLAY_PITCH_SIGN - pitch_zero
+    roll = values[DISPLAY_ROLL_SENSOR_KEY] * DISPLAY_ROLL_SIGN - roll_zero
     display_values = {
         "pitch": pitch,
         "roll": roll,
@@ -385,6 +520,25 @@ def attitude_changed(current, displayed):
     )
 
 
+def save_level_reference():
+    with open(LEVEL_REFERENCE_FILE, "w") as reference_file:
+        reference_file.write("%.5f\n%.5f\n" % (pitch_zero, roll_zero))
+
+
+def set_level_reference(values):
+    global pitch_zero, roll_zero
+    if values is None:
+        return False
+
+    pitch_zero = values[DISPLAY_PITCH_SENSOR_KEY] * DISPLAY_PITCH_SIGN
+    roll_zero = values[DISPLAY_ROLL_SENSOR_KEY] * DISPLAY_ROLL_SIGN
+    try:
+        save_level_reference()
+    except OSError as exc:
+        print("Level reference active until restart; save failed:", exc)
+    return True
+
+
 def draw_dashboard(values, state):
     g.clear(BLACK)
     draw_header(state)
@@ -392,11 +546,14 @@ def draw_dashboard(values, state):
     if active_screen == 0:
         display_values, pitch, roll = vehicle_values(values)
         draw_horizon(pitch, roll)
+        draw_calibrate_button()
         draw_readouts(display_values)
-        if state == "LIVE" and display_values is not None and is_level(pitch, roll):
+        if state == "LIVE" and display_values is not None and level_frame_active:
             draw_level_frame()
     else:
         draw_corner_heights(values)
+    if state != "LIVE":
+        draw_sensor_warning(state)
 
 
 def touch_screen_at(point):
@@ -409,6 +566,13 @@ def touch_screen_at(point):
         if 124 <= x < 236:
             return 1
     return None
+
+
+def touch_calibrate_at(point):
+    if point is None or active_screen != 0:
+        return False
+    x, y = point
+    return 140 <= x < 228 and 50 <= y < 68
 
 
 def touch_corner_view_at(point):
@@ -502,28 +666,44 @@ while True:
     attitude = (pitch, roll)
 
     if not screen_initialized:
-        draw_dashboard(sensor.latest, state)
-        screen_initialized = True
-        last_state = state
-        last_attitude = attitude if sensor.latest is not None else None
-        last_level = (
+        level_frame_active = (
             state == "LIVE"
             and sensor.latest is not None
             and is_level(pitch, roll)
         )
+        draw_dashboard(sensor.latest, state)
+        screen_initialized = True
+        last_state = state
+        last_attitude = attitude if sensor.latest is not None else None
+        last_level = level_frame_active
         last_render_ms = time.ticks_ms()
     else:
-        if state != last_state or sensor.power_percent != last_battery_percent:
+        state_changed = state != last_state
+        if state_changed:
             draw_header(state)
             last_state = state
+            last_battery_percent = sensor.power_percent
+            if state == "LIVE":
+                level_frame_active = is_level(pitch, roll)
+                draw_dashboard(sensor.latest, state)
+                last_attitude = attitude
+                last_level = level_frame_active
+                last_render_ms = time.ticks_ms()
+            elif state_changed:
+                level_frame_active = False
+                last_level = False
+                draw_sensor_warning(state)
+        elif sensor.power_percent != last_battery_percent:
+            draw_header(state)
             last_battery_percent = sensor.power_percent
 
         level_now = (
             state == "LIVE"
             and sensor.latest is not None
-            and is_level(pitch, roll)
+            and is_level(pitch, roll, level_frame_active)
         )
-        if sensor.latest is not None and (
+        level_frame_active = level_now
+        if state == "LIVE" and sensor.latest is not None and (
             attitude_changed(attitude, last_attitude) or level_now != last_level
         ) and (
             last_render_ms == 0
@@ -531,6 +711,7 @@ while True:
         ):
             if active_screen == 0:
                 draw_horizon(pitch, roll)
+                draw_calibrate_button()
                 draw_readouts(display_values)
                 if level_now:
                     draw_level_frame()
@@ -545,7 +726,18 @@ while True:
             touch_point = touch.read()
             if touch_point is not None and not touch_was_down:
                 selected_screen = touch_screen_at(touch_point)
-                if selected_screen is not None and selected_screen != active_screen:
+                if touch_calibrate_at(touch_point):
+                    if state == "LIVE" and set_level_reference(sensor.latest):
+                        display_values, pitch, roll = vehicle_values(sensor.latest)
+                        level_frame_active = is_level(pitch, roll)
+                        draw_dashboard(sensor.latest, state)
+                        attitude = (pitch, roll)
+                        last_attitude = attitude
+                        last_level = level_frame_active
+                        last_render_ms = time.ticks_ms()
+                    else:
+                        draw_sensor_warning(state, "ZERO NEEDS LIVE SENSOR")
+                elif selected_screen is not None and selected_screen != active_screen:
                     active_screen = selected_screen
                     draw_dashboard(sensor.latest, state)
                 elif active_screen == 1:

@@ -30,10 +30,15 @@ This view ranks the two corners with the largest estimated lift amounts for a tw
 
 - `src/main.py` provides two touch-selectable pages: **HORIZON** for the virtual horizon dashboard and **LEVELLING** for the corner lift estimates. The levelling page has **2 WEDGES** and **4 CORNERS** views; the two-wedge view is selected by default. The top bar shows the latest sensor battery percentage beside the BLE status.
 - The display uses decoded pitch and roll from the WT901 BLE client and redraws the readouts and horizon when either changes by at least 0.2°. The status header redraws at startup or when connection or battery status changes. Yaw is not displayed.
-- On the HORIZON page, a green frame appears when live pitch and roll are both within ±0.5°. The threshold is configurable in `src/config.py`; this visual behavior has not yet been verified on hardware.
+- On the HORIZON page, a green frame turns on when live pitch and roll are both within ±0.5° and stays on until either exceeds ±0.7°. These thresholds are configurable in `src/config.py`; the behavior has not yet been verified on hardware.
+- If the sensor is stale or disconnected, the app displays a prominent warning and red frame instead of leaving a green level indication.
 - Dashboard operation and BLE connection/notification behavior remain unverified. An initial LCD memory-read screenshot attempt returned all-zero pixels; the replacement software-rendered screenshot path has not yet been tested on hardware. Protocol assumptions, physical board variant, and installed firmware also remain unverified.
 
 The **2 WEDGES** view ranks wheel corners by estimated lift and shows the two largest amounts. The **4 CORNERS** view shows all four estimates. Both use the owner-provided 4,035 mm wheelbase and 1,810/1,790 mm front/rear track widths with live vehicle pitch and roll. The calculation assumes the sensor is mounted level with the chassis at the midpoint of the wheelbase and track, positive pitch means front-high, and positive roll means left-high. These are geometric estimates; after placing wedges, recheck the live readings and adjust as needed. Verify the signs and estimates on the installed van before relying on them.
+
+### Set the level reference
+
+On the **HORIZON** screen, after leveling the van with a trusted reference, tap the rounded yellow **CALIBRATE** button in the upper-right corner above the arc. The app records the current pitch and roll as zero offsets in `/level_reference.cfg` on the ESP32 and uses them after restart. Tap **CALIBRATE** again to replace the reference after changing the sensor mount. The button requires live sensor data. Confirm the result on the physical display before relying on it; this calibration flow has not yet been hardware-verified.
 
 ## Repository layout
 

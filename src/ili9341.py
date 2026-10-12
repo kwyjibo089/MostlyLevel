@@ -114,30 +114,30 @@ class ILI9341:
     # ---------------------------------------------------------
 
     def _set_window(self, x0, y0, x1, y1):
-        # Column address
-        self._command(
-            0x2A,
-            bytes([
-                (x0 >> 8) & 0xFF,
-                x0 & 0xFF,
-                (x1 >> 8) & 0xFF,
-                x1 & 0xFF,
-            ])
-        )
-
-        # Page address
-        self._command(
-            0x2B,
-            bytes([
-                (y0 >> 8) & 0xFF,
-                y0 & 0xFF,
-                (y1 >> 8) & 0xFF,
-                y1 & 0xFF,
-            ])
-        )
-
-        # Start memory write
-        self._command(0x2C)
+        # Keep chip select asserted across the address-window commands. This
+        # cuts GPIO/transaction overhead for the many small dashboard shapes.
+        self.cs(0)
+        self.dc(0)
+        self.spi.write(b"\x2A")
+        self.dc(1)
+        self.spi.write(bytes([
+            (x0 >> 8) & 0xFF,
+            x0 & 0xFF,
+            (x1 >> 8) & 0xFF,
+            x1 & 0xFF,
+        ]))
+        self.dc(0)
+        self.spi.write(b"\x2B")
+        self.dc(1)
+        self.spi.write(bytes([
+            (y0 >> 8) & 0xFF,
+            y0 & 0xFF,
+            (y1 >> 8) & 0xFF,
+            y1 & 0xFF,
+        ]))
+        self.dc(0)
+        self.spi.write(b"\x2C")
+        self.cs(1)
 
     # ---------------------------------------------------------
     # Pixel data
