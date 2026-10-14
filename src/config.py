@@ -64,6 +64,10 @@ LCD_SPI_MISO_PIN = 13
 LCD_CS_PIN = 10
 LCD_DC_PIN = 46
 LCD_BACKLIGHT_PIN = 45
+# Reused per-colour fill buffers: CHUNK_PIXELS * 2 bytes each, at most
+# CACHE_COLOURS buffers (16 KB with these values). Untested tuning values.
+LCD_FILL_CHUNK_PIXELS = 512
+LCD_FILL_CACHE_COLOURS = 16
 
 # FT5x06-compatible touchscreen wiring from the reference BSP.
 TOUCH_I2C_ID = 0

@@ -4,6 +4,8 @@ from config import (
     LCD_BACKLIGHT_PIN,
     LCD_CS_PIN,
     LCD_DC_PIN,
+    LCD_FILL_CACHE_COLOURS,
+    LCD_FILL_CHUNK_PIXELS,
     LCD_SPI_BAUDRATE,
     LCD_SPI_ID,
     LCD_SPI_MISO_PIN,
@@ -31,6 +33,10 @@ class ILI9341:
             mosi=Pin(LCD_SPI_MOSI_PIN),
             miso=Pin(LCD_SPI_MISO_PIN),
         )
+
+        # Reused buffers keep the per-shape draw path free of allocations.
+        self._window = bytearray(4)
+        self._chunks = {}
 
         self._init_display()
 
@@ -109,59 +115,57 @@ class ILI9341:
         time.sleep_ms(20)
 
     # ---------------------------------------------------------
-    # Drawing window
+    # Drawing window and pixel data
     # Coordinates are inclusive: x0, y0, x1, y1.
     # ---------------------------------------------------------
 
-    def _set_window(self, x0, y0, x1, y1):
-        # Keep chip select asserted across the address-window commands. This
-        # cuts GPIO/transaction overhead for the many small dashboard shapes.
-        self.cs(0)
+    def _send_window(self, x0, y0, x1, y1):
+        """Send the address-window commands; the caller holds CS low."""
+        window = self._window
         self.dc(0)
         self.spi.write(b"\x2A")
+        window[0] = (x0 >> 8) & 0xFF
+        window[1] = x0 & 0xFF
+        window[2] = (x1 >> 8) & 0xFF
+        window[3] = x1 & 0xFF
         self.dc(1)
-        self.spi.write(bytes([
-            (x0 >> 8) & 0xFF,
-            x0 & 0xFF,
-            (x1 >> 8) & 0xFF,
-            x1 & 0xFF,
-        ]))
+        self.spi.write(window)
         self.dc(0)
         self.spi.write(b"\x2B")
+        window[0] = (y0 >> 8) & 0xFF
+        window[1] = y0 & 0xFF
+        window[2] = (y1 >> 8) & 0xFF
+        window[3] = y1 & 0xFF
         self.dc(1)
-        self.spi.write(bytes([
-            (y0 >> 8) & 0xFF,
-            y0 & 0xFF,
-            (y1 >> 8) & 0xFF,
-            y1 & 0xFF,
-        ]))
+        self.spi.write(window)
         self.dc(0)
         self.spi.write(b"\x2C")
-        self.cs(1)
 
-    # ---------------------------------------------------------
-    # Pixel data
-    # ---------------------------------------------------------
+    def _colour_chunk(self, color):
+        """Return a reusable RGB565 run for color, avoiding per-call allocation."""
+        chunk = self._chunks.get(color)
+        if chunk is None:
+            if len(self._chunks) >= LCD_FILL_CACHE_COLOURS:
+                self._chunks.clear()
+            chunk = memoryview(
+                bytes(((color >> 8) & 0xFF, color & 0xFF)) * LCD_FILL_CHUNK_PIXELS
+            )
+            self._chunks[color] = chunk
+        return chunk
 
-    def _write_pixels(self, color, count):
-        """Write count pixels in RGB565 format without a framebuffer."""
-        if count <= 0:
-            return
-
-        hi = (color >> 8) & 0xFF
-        lo = color & 0xFF
-
-        # Reuse a small buffer instead of allocating a full screen.
-        chunk = bytes([hi, lo]) * min(count, 240)
+    def _fill_window(self, x0, y0, x1, y1, color):
+        """Fill an inclusive window in one CS transaction."""
+        count = (x1 - x0 + 1) * (y1 - y0 + 1)
+        chunk = self._colour_chunk(color)
 
         self.cs(0)
+        self._send_window(x0, y0, x1, y1)
         self.dc(1)
-
-        while count > 0:
-            n = min(count, 240)
-            self.spi.write(chunk if n == 240 else chunk[:n * 2])
-            count -= n
-
+        while count >= LCD_FILL_CHUNK_PIXELS:
+            self.spi.write(chunk)
+            count -= LCD_FILL_CHUNK_PIXELS
+        if count:
+            self.spi.write(chunk[:count * 2])
         self.cs(1)
 
     # ---------------------------------------------------------
@@ -170,13 +174,7 @@ class ILI9341:
 
     def fill(self, color):
         """Fill the complete display with an RGB565 colour."""
-        self._set_window(
-            0, 0,
-            self.WIDTH - 1,
-            self.HEIGHT - 1
-        )
-
-        self._write_pixels(color, self.WIDTH * self.HEIGHT)
+        self._fill_window(0, 0, self.WIDTH - 1, self.HEIGHT - 1, color)
 
     # ---------------------------------------------------------
     # Individual pixel
@@ -187,8 +185,7 @@ class ILI9341:
         if not (0 <= x < self.WIDTH and 0 <= y < self.HEIGHT):
             return
 
-        self._set_window(x, y, x, y)
-        self._write_pixels(color, 1)
+        self._fill_window(x, y, x, y, color)
 
     # ---------------------------------------------------------
     # Horizontal line
@@ -205,8 +202,7 @@ class ILI9341:
         if x0 >= x1:
             return
 
-        self._set_window(x0, y, x1 - 1, y)
-        self._write_pixels(color, x1 - x0)
+        self._fill_window(x0, y, x1 - 1, y, color)
 
     # ---------------------------------------------------------
     # Vertical line
@@ -223,8 +219,7 @@ class ILI9341:
         if y0 >= y1:
             return
 
-        self._set_window(x, y0, x, y1 - 1)
-        self._write_pixels(color, y1 - y0)
+        self._fill_window(x, y0, x, y1 - 1, color)
 
     # ---------------------------------------------------------
     # Filled rectangle
@@ -243,12 +238,7 @@ class ILI9341:
         if x0 >= x1 or y0 >= y1:
             return
 
-        self._set_window(x0, y0, x1 - 1, y1 - 1)
-
-        self._write_pixels(
-            color,
-            (x1 - x0) * (y1 - y0)
-        )
+        self._fill_window(x0, y0, x1 - 1, y1 - 1, color)
 
     # ---------------------------------------------------------
     # Backlight

@@ -56,6 +56,7 @@ except Exception as exc:
 
 active_screen = 0
 corner_view = 0
+corner_content = None
 LEVEL_REFERENCE_FILE = "/level_reference.cfg"
 
 
@@ -205,61 +206,117 @@ def corner_lift_heights(values):
     return {corner: (highest - height) / 10.0 for corner, height in elevations.items()}
 
 
-def draw_wedge_spot(number, label, height_cm, y):
-    x = 4
-    width = 232
-    height = 100
-    g.fill_rect(x, y, width, height, DARK)
-    g.rect(x, y, width, height, GREY)
-    g.text(x + 12, y + 14, "%d. %s" % (number, label), CYAN)
+CORNER_ORDER = ("FRONT LEFT", "FRONT RIGHT", "REAR LEFT", "REAR RIGHT")
+CORNER_CONTENT_TOP = 60
+CORNER_VALUE_HEIGHT = 16  # Scale-2 glyph rows.
+LEVEL_CONTENT = "LEVEL"
 
-    value = "--.- cm" if height_cm is None else "%.1f cm" % height_cm
+
+def cm_text(height_cm):
+    return "--.- cm" if height_cm is None else "%.1f cm" % height_cm
+
+
+def corner_page_content(values):
+    """Return the text the active LEVELLING view should show.
+
+    The result is LEVEL_CONTENT or a tuple of (label, value text) cells, so
+    redraws can be limited to cells whose displayed text changed.
+    """
+    heights = corner_lift_heights(values)
+    if corner_view == 0:
+        if heights is None:
+            return (("--", cm_text(None)), ("--", cm_text(None)))
+        ranked = sorted(heights.items(), key=lambda item: item[1], reverse=True)
+        if ranked[0][1] < NO_WEDGE_NEEDED_THRESHOLD_CM:
+            return LEVEL_CONTENT
+        return tuple((label, cm_text(height)) for label, height in ranked[:2])
+
+    return tuple(
+        (label, cm_text(None if heights is None else heights[label]))
+        for label in CORNER_ORDER
+    )
+
+
+def draw_corner_cell(index, label, value, full):
+    """Draw one LEVELLING cell; when not full, repaint only its value line."""
+    if corner_view == 0:
+        x = 4
+        y = (68, 188)[index]
+        width = 232
+        height = 100
+        label_text = "%d. %s" % (index + 1, label)
+        label_x = x + 12
+        label_y = y + 14
+        value_y = y + 43
+    else:
+        x, y = ((4, 62), (124, 62), (4, 190), (124, 190))[index]
+        width = 112
+        height = 116
+        label_text = label
+        label_x = x + (width - len(label) * 6) // 2
+        label_y = y + 23
+        value_y = y + 50
+
+    if full:
+        g.fill_rect(x, y, width, height, DARK)
+        g.rect(x, y, width, height, GREY)
+        g.text(label_x, label_y, label_text, CYAN)
+    else:
+        g.fill_rect(x + 1, value_y, width - 2, CORNER_VALUE_HEIGHT, DARK)
+
     value_x = x + (width - len(value) * 12) // 2
-    g.text(value_x, y + 43, value, WHITE, scale=2)
+    g.text(value_x, value_y, value, WHITE, scale=2)
 
 
-def draw_corner_value(label, height_cm, x, y):
-    width = 112
-    height = 116
-    g.fill_rect(x, y, width, height, DARK)
-    g.rect(x, y, width, height, GREY)
-    label_x = x + (width - len(label) * 6) // 2
-    g.text(label_x, y + 23, label, CYAN)
-    value = "--.- cm" if height_cm is None else "%.1f cm" % height_cm
-    value_x = x + (width - len(value) * 12) // 2
-    g.text(value_x, y + 50, value, WHITE, scale=2)
+def draw_corner_content(content):
+    if content == LEVEL_CONTENT:
+        g.text(69, 157, "NO WEDGES NEEDED", GREEN)
+        g.text(62, 178, "VAN IS LEVEL", WHITE)
+        return
+    for index, (label, value) in enumerate(content):
+        draw_corner_cell(index, label, value, True)
 
 
 def draw_corner_heights(values):
-    heights = corner_lift_heights(values)
+    """Draw the complete LEVELLING page below the navigation bar."""
+    global corner_content
+    corner_content = corner_page_content(values)
     g.fill_rect(0, HORIZON_TOP, WIDTH, HEIGHT - HORIZON_TOP, BLACK)
     draw_corner_view_tabs()
+    draw_corner_content(corner_content)
 
-    if heights is None:
-        if corner_view == 0:
-            draw_wedge_spot(1, "--", None, 68)
-            draw_wedge_spot(2, "--", None, 188)
-        else:
-            front_left = front_right = rear_left = rear_right = None
-            draw_corner_value("FRONT LEFT", front_left, 4, 62)
-            draw_corner_value("FRONT RIGHT", front_right, 124, 62)
-            draw_corner_value("REAR LEFT", rear_left, 4, 190)
-            draw_corner_value("REAR RIGHT", rear_right, 124, 190)
+
+def update_corner_heights(values):
+    """Repaint only the LEVELLING cells whose displayed text changed."""
+    global corner_content
+    content = corner_page_content(values)
+    if content == corner_content:
         return
 
-    ranked = sorted(heights.items(), key=lambda item: item[1], reverse=True)
-    if corner_view == 0:
-        if ranked[0][1] < NO_WEDGE_NEEDED_THRESHOLD_CM:
-            g.text(69, 157, "NO WEDGES NEEDED", GREEN)
-            g.text(62, 178, "VAN IS LEVEL", WHITE)
-            return
-        draw_wedge_spot(1, ranked[0][0], ranked[0][1], 68)
-        draw_wedge_spot(2, ranked[1][0], ranked[1][1], 188)
-    else:
-        draw_corner_value("FRONT LEFT", heights["FRONT LEFT"], 4, 62)
-        draw_corner_value("FRONT RIGHT", heights["FRONT RIGHT"], 124, 62)
-        draw_corner_value("REAR LEFT", heights["REAR LEFT"], 4, 190)
-        draw_corner_value("REAR RIGHT", heights["REAR RIGHT"], 124, 190)
+    previous = corner_content
+    corner_content = content
+    if (
+        previous is None
+        or content == LEVEL_CONTENT
+        or previous == LEVEL_CONTENT
+        or len(content) != len(previous)
+    ):
+        g.fill_rect(
+            0,
+            CORNER_CONTENT_TOP,
+            WIDTH,
+            HEIGHT - CORNER_CONTENT_TOP,
+            BLACK,
+        )
+        draw_corner_content(content)
+        return
+
+    for index, (label, value) in enumerate(content):
+        old_label, old_value = previous[index]
+        if label != old_label:
+            draw_corner_cell(index, label, value, True)
+        elif value != old_value:
+            draw_corner_cell(index, label, value, False)
 
 
 def draw_readouts(values):
@@ -716,7 +773,7 @@ while True:
                 if level_now:
                     draw_level_frame()
             else:
-                draw_corner_heights(sensor.latest)
+                update_corner_heights(sensor.latest)
             last_attitude = attitude
             last_level = level_now
             last_render_ms = time.ticks_ms()

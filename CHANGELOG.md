@@ -4,8 +4,8 @@ Notable project changes are recorded here. This file was introduced with the ini
 
 ## Unreleased
 
+- Reduced LEVELLING page flicker: the layout is drawn once on page or view changes, and later updates repaint only cells whose displayed text changed (full content redraw only when switching to or from the "no wedges needed" message). The ILI9341 driver now reuses per-colour fill buffers (sized by `LCD_FILL_CHUNK_PIXELS`/`LCD_FILL_CACHE_COLOURS` in `config.py`) and a fixed window buffer, and sends each rectangle in one chip-select transaction. A desktop SPI simulation produced identical pixels before and after; on-device speed and flicker are not yet measured.
 - Fixed `save_screenshot` subtracting the level-reference offsets a second time and hard-coding the sensor axis swap; it now inverts the configured mapping so the BMP matches the last rendered attitude. Fixed the `ble_read.py` console diagnostic's measurement format string, which mixed `%` and `{}` placeholders and raised `TypeError`. Neither fix has been run on hardware.
-
 - Added a persistent level-reference calibration action on the HORIZON screen, a prominent red warning for unavailable sensor data, and separate 0.5°/0.7° level-frame on/off thresholds. Styled `CALIBRATE` as a rounded yellow button in the upper-right above the horizon arc. Grouped repeated horizon and ladder drawing operations, batched LCD address-window commands, and rasterized text in horizontal runs to reduce redraw flicker; hardware speedup remains to be measured.
 - Added a thicker green frame around the HORIZON display region when live pitch and roll are both within ±0.5°; inset the pitch/roll readout boxes with clear spacing. The threshold is configurable.
 - Added `src/config.py` for sensor identity/protocol settings, sensor axis mapping and scaling, vehicle geometry, display timing, and LCD/touch wiring; updated the client, scanner, and drivers to use it.
