@@ -114,7 +114,7 @@ def decode_packet(packet):
 
 def print_measurements(values):
     print(
-        "%s P:{:+.2f} R:{:+.2f} Y:{:+.2f}"
+        "%s P:%+.2f R:%+.2f Y:%+.2f"
         % (SENSOR_NAME, values["pitch"], values["roll"], values["yaw"])
     )
 

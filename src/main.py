@@ -600,11 +600,11 @@ def save_screenshot(path="/screenshot.bmp"):
     if last_attitude is None:
         values = None
     else:
-        # Convert the displayed vehicle axes back to the sensor-key layout
-        # expected by draw_dashboard, preserving the last rendered values.
+        # Invert vehicle_values() so draw_dashboard reproduces the last
+        # rendered attitude: restore the level reference and sensor mapping.
         values = {
-            "roll": last_attitude[0],
-            "pitch": last_attitude[1],
+            DISPLAY_PITCH_SENSOR_KEY: (last_attitude[0] + pitch_zero) / DISPLAY_PITCH_SIGN,
+            DISPLAY_ROLL_SENSOR_KEY: (last_attitude[1] + roll_zero) / DISPLAY_ROLL_SIGN,
         }
 
     tile_height = 8
