@@ -1,0 +1,17 @@
+# Development tooling only; the app itself runs on MicroPython from src/.
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+extend-exclude = ["reference"]
+
+[tool.ruff.lint]
+# Pyflakes (undefined names, unused imports, broken format strings),
+# pycodestyle errors/warnings, and bugbear checks.
+select = ["F", "E", "W", "B"]
+# B905 asks for zip(strict=...), which MicroPython's zip() does not accept.
+ignore = ["B905"]

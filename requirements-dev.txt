@@ -1,0 +1,4 @@
+mpremote==1.29.0
+mpy-cross==1.29.0.post2
+pytest==9.1.1
+ruff==0.17.1

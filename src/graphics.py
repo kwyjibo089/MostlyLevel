@@ -1,5 +1,3 @@
-from ili9341 import ILI9341
-
 BLACK = 0x0000
 WHITE = 0xFFFF
 RED = 0xF800

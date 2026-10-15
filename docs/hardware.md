@@ -24,7 +24,7 @@ The owner provided a wheelbase of 4,035 mm, approximate front track width of 1,8
 
 An initial ILI9341 GRAM readback screenshot attempt produced an all-zero BMP, and an attempted full-screen software framebuffer allocation failed with `MemoryError`. The owner reported 193,600 bytes free after interrupting the app, but a single contiguous 153,600-byte allocation was still unavailable. The current screenshot implementation renders the dashboard in 8-row RGB565 tiles and streams a BMP to the filesystem; this smaller-allocation approach remains unverified on hardware.
 
-The firmware directory contains `ESP32_GENERIC_S3-20260824-v1.29.0.bin`. This is evidence of a firmware artifact in the repository only; the installed firmware is unknown.
+The firmware directory contains `ESP32_GENERIC_S3-20260824-v1.29.0.bin`. On 2026-10-15 the connected board reported `sys.implementation` as MicroPython 1.29.0, build `ESP32_GENERIC_S3`, machine "Generic ESP32S3 module with ESP32-S3", `.mpy` format 6.3, and about 157 KB free heap after interrupting the app. That matches the version of the image; whether this exact file was flashed is not recorded.
 
 The owner's 3D-printed case covers roughly the top 9 pixel rows of the display (estimated from a photo on 2026-10-15); the sides and bottom were reported as unobstructed. `SCREEN_TOP_INSET` in `src/config.py` moves the top of the UI below that edge.
 
@@ -43,7 +43,6 @@ No wiring inspection, board identification record, discovery transcript, or form
 ## Questions to resolve
 
 - What exact board model and variant is physically used, and is its wiring consistent with the source mapping?
-- What firmware version is installed on the target, and how are files deployed/run?
 - What are the sensor's actual BLE address behavior, service/characteristic/descriptor handles, and notification format? Is the address stable?
 - Does the sensor packet require checksum validation, and are the implemented field order and scale ranges correct for its configuration?
 - Does the current swapped mapping produce the correct movement and sign for vehicle pitch and roll across all four directions? How will zero/calibration be defined?
