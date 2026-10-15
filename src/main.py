@@ -41,6 +41,29 @@ HORIZON_TOP = 40
 HORIZON_BOTTOM = HEIGHT - 1
 HORIZON_CENTER_X = WIDTH // 2
 HORIZON_CENTER_Y = (HORIZON_TOP + HORIZON_BOTTOM) // 2
+
+# Fixed HORIZON elements. Live horizon redraws skip these rects so the
+# elements are not erased and repainted on every update.
+CALIBRATE_RECT = (140, 50, 88, 18)
+CALIBRATE_RADIUS = 5
+READOUT_WIDTH = 108
+READOUT_HEIGHT = 36
+READOUT_Y = HEIGHT - READOUT_HEIGHT - 8
+READOUT_RECTS = (
+    (10, READOUT_Y, READOUT_WIDTH, READOUT_HEIGHT),
+    (WIDTH - 10 - READOUT_WIDTH, READOUT_Y, READOUT_WIDTH, READOUT_HEIGHT),
+)
+READOUT_TEXT_INSET_X = 4
+READOUT_TEXT_INSET_Y = 10
+READOUT_CHAR_WIDTH = 12  # Scale-2 glyph cell.
+READOUT_CHAR_HEIGHT = 16
+FRAME_THICKNESS = 6
+FRAME_RECTS = (
+    (0, HORIZON_TOP, WIDTH, FRAME_THICKNESS),
+    (0, HEIGHT - FRAME_THICKNESS, WIDTH, FRAME_THICKNESS),
+    (0, HORIZON_TOP, FRAME_THICKNESS, HEIGHT - HORIZON_TOP),
+    (WIDTH - FRAME_THICKNESS, HORIZON_TOP, FRAME_THICKNESS, HEIGHT - HORIZON_TOP),
+)
 print("Starting MostlyLevel dashboard")
 
 lcd = ILI9341()
@@ -72,6 +95,10 @@ def load_level_reference():
 
 pitch_zero, roll_zero = load_level_reference()
 level_frame_active = False
+# What is currently on the HORIZON page, so live updates can skip unchanged parts.
+level_frame_drawn = False
+readout_texts = None
+calibrate_corner_spans = None
 
 
 def clamp(value, low, high):
@@ -124,12 +151,22 @@ def draw_navigation():
 
 
 
+def calibrate_corner_insets():
+    """Return the per-row inset of the CALIBRATE button's rounded corners."""
+    radius = CALIBRATE_RADIUS
+    insets = []
+    for row in range(radius):
+        distance = radius - row - 0.5
+        insets.append(radius - int(math.sqrt(radius * radius - distance * distance)))
+    return tuple(insets)
+
+
+CALIBRATE_INSETS = calibrate_corner_insets()
+
+
 def draw_calibrate_button():
-    button_x = 140
-    button_y = 50
-    button_width = 88
-    button_height = 18
-    radius = 5
+    button_x, button_y, button_width, button_height = CALIBRATE_RECT
+    radius = CALIBRATE_RADIUS
     g.fill_rect(
         button_x + radius,
         button_y,
@@ -144,9 +181,7 @@ def draw_calibrate_button():
         button_height - radius * 2,
         YELLOW,
     )
-    for row in range(radius):
-        distance = radius - row - 0.5
-        inset = radius - int(math.sqrt(radius * radius - distance * distance))
+    for row, inset in enumerate(CALIBRATE_INSETS):
         g.fill_rect(
             button_x + inset,
             button_y + row,
@@ -167,6 +202,33 @@ def draw_calibrate_button():
         "CALIBRATE",
         BLACK,
     )
+
+
+def calibrate_corner_background(pitch_deg, roll_deg):
+    """Return (x, y, w, colour) spans for the horizon behind the button corners.
+
+    Live redraws skip the whole button rect, so these few corner pixels are
+    repainted separately, and only when their horizon colour changes.
+    """
+    pitch_deg, roll_slope = horizon_geometry(pitch_deg, roll_deg)
+    button_x, button_y, button_width, button_height = CALIBRATE_RECT
+    spans = []
+    for row, inset in enumerate(CALIBRATE_INSETS):
+        if inset <= 0:
+            continue
+        for y in (button_y + row, button_y + button_height - row - 1):
+            for start_x in (button_x, button_x + button_width - inset):
+                span_x = start_x
+                span_colour = None
+                for x in range(start_x, start_x + inset):
+                    colour = horizon_colour_at(x, y, pitch_deg, roll_slope)
+                    if colour != span_colour:
+                        if span_colour is not None:
+                            spans.append((span_x, y, x - span_x, span_colour))
+                        span_x = x
+                        span_colour = colour
+                spans.append((span_x, y, start_x + inset - span_x, span_colour))
+    return tuple(spans)
 
 
 def draw_corner_view_tabs():
@@ -319,17 +381,54 @@ def update_corner_heights(values):
             draw_corner_cell(index, label, value, False)
 
 
-def draw_readouts(values):
-    box_height = 36
-    box_y = HEIGHT - box_height - 8
-    box_width = 108
-    pitch_x = 10
-    roll_x = WIDTH - pitch_x - box_width
+def readout_text(values):
+    return (
+        "P " + angle_text(values, "pitch") + "°",
+        "R " + angle_text(values, "roll") + "°",
+    )
 
-    g.fill_rect(pitch_x, box_y, box_width, box_height, PILL)
-    g.fill_rect(roll_x, box_y, box_width, box_height, PILL)
-    g.text(pitch_x + 4, box_y + 10, "P " + angle_text(values, "pitch") + "°", WHITE, scale=2)
-    g.text(roll_x + 4, box_y + 10, "R " + angle_text(values, "roll") + "°", WHITE, scale=2)
+
+def draw_readouts(values):
+    global readout_texts
+    readout_texts = readout_text(values)
+    for (x, y, width, height), text in zip(READOUT_RECTS, readout_texts):
+        g.fill_rect(x, y, width, height, PILL)
+        g.text(
+            x + READOUT_TEXT_INSET_X,
+            y + READOUT_TEXT_INSET_Y,
+            text,
+            WHITE,
+            scale=2,
+        )
+
+
+def update_readouts(values):
+    """Repaint only the readout characters whose text changed."""
+    global readout_texts
+    if readout_texts is None:
+        draw_readouts(values)
+        return
+
+    texts = readout_text(values)
+    for (x, y, width, height), text, old_text in zip(
+        READOUT_RECTS, texts, readout_texts
+    ):
+        if text == old_text:
+            continue
+        text_x = x + READOUT_TEXT_INSET_X
+        text_y = y + READOUT_TEXT_INSET_Y
+        if len(text) != len(old_text):
+            g.fill_rect(x, y, width, height, PILL)
+            g.text(text_x, text_y, text, WHITE, scale=2)
+            continue
+        for index in range(len(text)):
+            if text[index] != old_text[index]:
+                char_x = text_x + index * READOUT_CHAR_WIDTH
+                g.fill_rect(
+                    char_x, text_y, READOUT_CHAR_WIDTH, READOUT_CHAR_HEIGHT, PILL
+                )
+                g.text(char_x, text_y, text[index], WHITE, scale=2)
+    readout_texts = texts
 
 
 def is_level(pitch, roll, was_level=False):
@@ -349,14 +448,12 @@ def draw_level_frame():
 
 
 def draw_status_frame(colour):
-    thickness = 6
-    g.fill_rect(0, HORIZON_TOP, WIDTH, thickness, colour)
-    g.fill_rect(0, HEIGHT - thickness, WIDTH, thickness, colour)
-    g.fill_rect(0, HORIZON_TOP, thickness, HEIGHT - HORIZON_TOP, colour)
-    g.fill_rect(WIDTH - thickness, HORIZON_TOP, thickness, HEIGHT - HORIZON_TOP, colour)
+    for x, y, width, height in FRAME_RECTS:
+        g.fill_rect(x, y, width, height, colour)
 
 
 def draw_sensor_warning(state, message=None):
+    global level_frame_drawn
     if message is None:
         if state == "NO DATA":
             message = "SENSOR DATA STALE"
@@ -374,6 +471,25 @@ def draw_sensor_warning(state, message=None):
     text_x = (WIDTH - len(message) * 6) // 2
     g.text(text_x, panel_y + 13, message, YELLOW)
     draw_status_frame(RED)
+    level_frame_drawn = False
+
+
+def horizon_geometry(pitch_deg, roll_deg):
+    """Return the clamped pitch and roll slope used to draw the horizon."""
+    pitch_deg = clamp(pitch_deg, -35.0, 35.0)
+    roll_deg = clamp(roll_deg, -45.0, 45.0)
+    return pitch_deg, math.tan(math.radians(roll_deg))
+
+
+def horizon_colour_at(x, y, pitch_deg, roll_slope):
+    """Return the sky/line/ground colour draw_horizon paints at (x, y)."""
+    # draw_horizon samples each 4-pixel column at its centre.
+    boundary = horizon_y((x // 4) * 4 + 2, pitch_deg, roll_slope)
+    if y < boundary:
+        return SKY
+    if y == boundary:
+        return WHITE
+    return GROUND
 
 
 def horizon_y(x, pitch_deg, roll_slope):
@@ -500,9 +616,8 @@ def draw_van_side(center_y):
 
 
 def draw_horizon(pitch_deg, roll_deg):
-    pitch_deg = clamp(pitch_deg, -35.0, 35.0)
     roll_deg = clamp(roll_deg, -45.0, 45.0)
-    roll_slope = math.tan(math.radians(roll_deg))
+    pitch_deg, roll_slope = horizon_geometry(pitch_deg, roll_deg)
 
     # Group adjacent strips with the same boundary height. Near level, this
     # replaces dozens of tiny SPI windows with only a few wide rectangles.
@@ -551,6 +666,30 @@ def draw_horizon(pitch_deg, roll_deg):
     draw_van_side(HORIZON_CENTER_Y)
 
 
+def update_horizon_page(pitch, roll, display_values, level_now):
+    """Redraw the moving HORIZON graphics around the fixed elements."""
+    global calibrate_corner_spans, level_frame_drawn
+    exclusions = (CALIBRATE_RECT,) + READOUT_RECTS
+    if level_now:
+        exclusions += FRAME_RECTS
+    g.set_exclusions(exclusions)
+    try:
+        draw_horizon(pitch, roll)
+    finally:
+        g.set_exclusions(())
+
+    spans = calibrate_corner_background(pitch, roll)
+    if spans != calibrate_corner_spans:
+        for x, y, width, colour in spans:
+            g.fill_rect(x, y, width, 1, colour)
+        calibrate_corner_spans = spans
+
+    update_readouts(display_values)
+    if level_now and not level_frame_drawn:
+        draw_level_frame()
+    level_frame_drawn = level_now
+
+
 def vehicle_values(values):
     # The observed installation responds on crossed sensor axes: raising the
     # front changes the decoded X/roll channel, while raising the left changes
@@ -597,6 +736,8 @@ def set_level_reference(values):
 
 
 def draw_dashboard(values, state):
+    global calibrate_corner_spans, level_frame_drawn
+    level_frame_drawn = False
     g.clear(BLACK)
     draw_header(state)
     draw_navigation()
@@ -604,9 +745,11 @@ def draw_dashboard(values, state):
         display_values, pitch, roll = vehicle_values(values)
         draw_horizon(pitch, roll)
         draw_calibrate_button()
+        calibrate_corner_spans = calibrate_corner_background(pitch, roll)
         draw_readouts(display_values)
         if state == "LIVE" and display_values is not None and level_frame_active:
             draw_level_frame()
+            level_frame_drawn = True
     else:
         draw_corner_heights(values)
     if state != "LIVE":
@@ -629,7 +772,11 @@ def touch_calibrate_at(point):
     if point is None or active_screen != 0:
         return False
     x, y = point
-    return 140 <= x < 228 and 50 <= y < 68
+    button_x, button_y, button_width, button_height = CALIBRATE_RECT
+    return (
+        button_x <= x < button_x + button_width
+        and button_y <= y < button_y + button_height
+    )
 
 
 def touch_corner_view_at(point):
@@ -767,11 +914,7 @@ while True:
             or time.ticks_diff(now, last_render_ms) >= RENDER_INTERVAL_MS
         ):
             if active_screen == 0:
-                draw_horizon(pitch, roll)
-                draw_calibrate_button()
-                draw_readouts(display_values)
-                if level_now:
-                    draw_level_frame()
+                update_horizon_page(pitch, roll, display_values, level_now)
             else:
                 update_corner_heights(sensor.latest)
             last_attitude = attitude

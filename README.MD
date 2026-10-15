@@ -75,7 +75,15 @@ Connect the ESP32 over USB and check that it is detected:
 .venv/bin/mpremote connect list
 ```
 
-Copy the application and its imported modules to the board's filesystem root:
+Upload the application and reset the board with the deploy script:
+
+```bash
+tools/deploy.sh
+```
+
+It copies every `src/*.py` file except `ble_scan.py` to the board's filesystem root in a single `mpremote` session, then resets the board so the new code starts. `mpremote` compares each file's SHA-256 hash with the copy on the board and skips unchanged files, so you can run the script after any edit without picking files. Options: `-p PORT` selects a serial port instead of `auto`, `-f` copies files even if unchanged, `-n` skips the reset, `-r` opens the REPL instead of resetting, and file arguments (for example `tools/deploy.sh src/ble_scan.py`) upload only those files.
+
+To copy files one at a time instead:
 
 ```bash
 .venv/bin/mpremote connect auto fs cp src/config.py :config.py
