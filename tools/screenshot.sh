@@ -16,7 +16,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-mpremote="$repo_root/.venv/bin/mpremote"
+mpremote="${MPREMOTE:-$repo_root/.venv/bin/mpremote}"
 
 port="auto"
 after=(+ reset)
@@ -53,7 +53,7 @@ if [[ -z "$base" ]]; then
     echo "File name needs more than an extension: $name" >&2
     exit 2
 fi
-png="$repo_root/assets/$base.png"
+png="${ASSETS_DIR:-$repo_root/assets}/$base.png"
 # On the board: without an extension, or with any extension other than .bmp,
 # append .bmp (wedges.png -> wedges.png.bmp).
 if [[ "${name,,}" != *.bmp ]]; then

@@ -85,9 +85,11 @@ Upload the application and reset the board with the deploy script:
 tools/deploy.sh
 ```
 
-It copies every `src/*.py` file except `ble_scan.py` to the board's filesystem root in a single `mpremote` session, then resets the board so the new code starts. `mpremote` compares each file's SHA-256 hash with the copy on the board and skips unchanged files, so you can run the script after any edit without picking files. Options: `-p PORT` selects a serial port instead of `auto`, `-f` copies files even if unchanged, `-n` skips the reset, `-r` opens the REPL instead of resetting, and file arguments (for example `tools/deploy.sh src/ble_scan.py`) upload only those files.
+The script first builds `build/mpy/` with `tools/build_mpy.sh`: every module is precompiled to `.mpy` with `mpy-cross`, except `main.py` (MicroPython only starts `main.py` from source) and `config.py` (kept readable and editable), and `ble_scan.py` is left out. Precompiled modules load faster and spare the board compiling `app.py`, which needs RAM and fragments the heap. In one `mpremote` session the script then checks that the board accepts the `.mpy` version, copies the bundle to the filesystem root, deletes stale `.py` copies of precompiled modules (MicroPython would load `app.py` before `app.mpy`), and resets the board. `mpremote` compares each file's SHA-256 hash with the copy on the board and skips unchanged files, so you can run the script after any edit. It needs the dev tools from `requirements-dev.txt` (see "Tests and CI"); `mpy-cross` 1.29 matches the board's MicroPython 1.29.
 
-To copy files one at a time instead:
+Options: `-s` uploads the `.py` sources instead of `.mpy` (and removes stale `.mpy` files), `-p PORT` selects a serial port instead of `auto`, `-f` copies files even if unchanged, `-n` skips the reset, `-r` opens the REPL instead of resetting, and file arguments (for example `tools/deploy.sh src/ble_scan.py`) upload only those files as they are. The script never touches `boot.py`, the level reference, or other files on the board.
+
+To copy source files one at a time instead:
 
 ```bash
 .venv/bin/mpremote connect auto fs cp src/config.py :config.py
@@ -182,7 +184,7 @@ After an intentional visual change, regenerate the reference images and review t
 tools/test.sh --update-golden
 ```
 
-When a reference image differs, the test writes the actual image to `tests/golden/_actual/`; in CI it is attached to the run as the `golden-actual` artifact. GitHub Actions (`.github/workflows/ci.yml`) runs `tools/test.sh` for every pull request into `main` and after each merge.
+When a reference image differs, the test writes the actual image to `tests/golden/_actual/`; in CI it is attached to the run as the `golden-actual` artifact. GitHub Actions (`.github/workflows/ci.yml`) runs `tools/test.sh` for every pull request into `main` and after each merge, then builds the `.mpy` bundle and attaches it to the run as the `mostlylevel-mpy-<commit>` artifact; its files can be copied to the board as they are.
 
 ## Documentation
 
