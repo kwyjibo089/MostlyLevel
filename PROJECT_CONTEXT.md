@@ -4,7 +4,7 @@
 
 MostlyLevel is a campervan levelling display prototype. The active application is a small MicroPython program under `src/`; it draws a pitch-and-roll virtual horizon on an ILI9341 display and consumes decoded readings from the WT901 BLE client in `ble_read.py`. The decoder also returns yaw, which the display currently ignores.
 
-The repository also contains an ESP-IDF board support package under `reference/esp32_s3_es3c28p/`. Treat it as reference material, not as the active application build. A MicroPython ESP32_GENERIC_S3 firmware image is present under `firmware/`; its presence does not document how it was flashed or which device currently runs it.
+The repository also contains an ESP-IDF board support package under `reference/esp32_s3_es3c28p/`. Treat it as reference material, not as the active application build. A MicroPython ESP32_GENERIC_S3 firmware image is present under `firmware/`. On 2026-10-15 the connected board reported MicroPython 1.29.0, build `ESP32_GENERIC_S3`, the same version as that image; how it was flashed is not recorded.
 
 ## Status vocabulary
 
@@ -16,9 +16,9 @@ The repository also contains an ESP-IDF board support package under `reference/e
 ## Current status
 
 - **Implemented (source):** MicroPython ILI9341 SPI driver and graphics primitives; two touch-selectable pages (HORIZON virtual horizon and a LEVELLING page with two-wedge and four-corner views); persistent level-reference calibration, stale-data warning, and a hysteretic green HORIZON frame; grouped display drawing intended to reduce flicker; `src/config.py` centralizes sensor, vehicle, display, touch, and timing settings; FT5x06-compatible I2C touch reader based on reference BSP wiring; BLE client, battery percentage poll, notification setup attempt, and fixed-format packet decoder. `main.py` swaps decoded X/roll and Y/pitch for displayed vehicle axes based on the owner's reported sensor movement; corner-height signs still need validation with the planned centered installation. `ble_scan.py` remains a standalone discovery diagnostic.
-- **Tested:** No tests or hardware validation results are documented for the dashboard integration.
+- **Tested:** Automated desktop tests (`tools/test.sh`, run in CI) cover decoding, the BLE client handshake, levelling maths, axis mapping, calibration, touch targets, the display driver, compositing, and reference images, all against fake hardware. Owner observations from the device are recorded in `docs/hardware.md`. No automated test runs on the board.
 - **Planned:** confirm the sensor protocol and notification descriptor handling; verify the empirically swapped vehicle axis mapping, signs, and display scaling against the installed sensor.
-- **Unverified:** exact physical board variant, deployed firmware, touchscreen controller/pin mapping and coordinate orientation, dashboard rendering and redraw speed on the current device, calibration persistence/accuracy, BLE GATT details, sensor packet assumptions/scales, and physical angle conventions.
+- **Unverified:** exact physical board variant, touchscreen controller/pin mapping and coordinate orientation, dashboard rendering and redraw speed on the current device, calibration persistence/accuracy, BLE GATT details, sensor packet assumptions/scales, and physical angle conventions.
 
 ## Important constraints
 

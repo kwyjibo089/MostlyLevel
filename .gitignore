@@ -1,0 +1,7 @@
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+# Images written by failing reference-image tests.
+tests/golden/_actual/
+# Compiled .mpy output of tools/build_mpy.sh.
+build/

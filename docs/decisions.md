@@ -20,6 +20,7 @@ This document records choices visible in the current implementation separately f
 | Warn when sensor readings are unavailable | Show a red frame and in-screen warning for waiting, stale, disconnected, or error states. Source implements this; physical behavior remains unverified. |
 | Centralize adjustable hardware and tuning values | `src/config.py` stores sensor identity and protocol assumptions, axis mapping/signs, vehicle geometry, redraw timing, and LCD/touch pin assignments. The existing assumptions are unchanged; values such as the CCCD handle and sensor signs remain unverified. |
 | Composite the HORIZON page off-screen in strips | A full-screen buffer (153,600 bytes) could not be allocated, and direct drawing erased and repainted overlays on every update, which the owner observed as flicker even after limiting redraws. `compositor.py` records the page as rects and sends 240 × 40 strips (19.2 KB buffer), skipping unchanged strips. Matches the previous output in a desktop simulation; the owner reported a clear on-device improvement on 2026-10-15. Redraw timing has not been measured. |
+| Test under CPython with fake firmware modules; gate merges on CI | `tests/fakes/` replaces `machine`, `bluetooth`, and `framebuf`; the fake LCD decodes ILI9341 commands into pixels. Reference images in `tests/golden/` must be regenerated deliberately. `mpy-cross` 1.29 (matching the board's `.mpy` 6.3) checks MicroPython syntax. Running tests under the MicroPython unix port was considered and declined by the owner. Pull requests into `main` must pass the `tests` check. |
 | Keep the ESP-IDF BSP as reference material | Structural fact: it is nested under `reference/` and is not part of the MicroPython import path or a top-level build. Treating it as non-active is a documentation convention, not proof of long-term intent. |
 
 ## Dashboard integration update
@@ -31,9 +32,9 @@ The display uses a virtual horizon with pitch/roll readouts, a pitch ladder, and
 ## Status distinctions
 
 - **Implemented:** source-level functionality described above.
-- **Tested:** no test or hardware validation evidence is present for the dashboard/sensor integration.
+- **Tested:** automated desktop tests with fake hardware run in CI (see README, "Tests and CI"); they verify source behavior and rendering, not the physical sensor, touch, or display.
 - **Planned:** no formal approved roadmap is present. Confirm BLE notification setup and validate the dashboard's sensor axes/signs on the installed hardware.
-- **Unverified:** physical hardware identity/wiring, deployed firmware, actual BLE behavior and protocol, conversions, and vehicle coordinate conventions.
+- **Unverified:** physical hardware identity/wiring, actual BLE behavior and protocol, conversions, and vehicle coordinate conventions.
 
 ## Open questions
 

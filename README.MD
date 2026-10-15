@@ -51,6 +51,8 @@ On the **HORIZON** screen, after leveling the van with a trusted reference, tap 
 - `src/config.py` — editable sensor, vehicle geometry, display, touch, and timing settings.
 - `src/touch.py` — minimal FT5x06 I2C touchscreen reader for the reference board wiring.
 - `src/ble_scan.py` — standalone BLE discovery diagnostic; not used by the application.
+- `tests/` — desktop tests with fake hardware modules and reference images.
+- `tools/` — deploy, screenshot, and test scripts.
 - `firmware/` — ESP32_GENERIC_S3 MicroPython firmware image.
 - `reference/esp32_s3_es3c28p/` — separate ESP-IDF board support reference; it is not integrated with the MicroPython application.
 
@@ -163,6 +165,25 @@ mkdir -p screenshots
 ```
 
 You can then open `screenshots/screenshot1.bmp` or convert it to PNG for display in Markdown. The device needs enough free RAM for a small strip buffer and enough filesystem space for the BMP.
+
+## Tests and CI
+
+The tests run the MicroPython sources under desktop Python with stand-ins for the firmware modules (`machine`, `bluetooth`, `framebuf`) in `tests/fakes/`. The fake LCD decodes the ILI9341 command stream into pixels, so rendering is checked exactly as the driver would draw it. They cover packet decoding, the BLE client handshake, levelling maths, axis mapping and calibration, touch targets, the display driver and compositor, rendering invariants, and reference images of each page in `tests/golden/`. They do not exercise the real board, sensor, or touchscreen.
+
+Install the tools once, then run everything CI runs (ruff, a MicroPython compile check with `mpy-cross`, and pytest):
+
+```bash
+.venv/bin/python -m pip install -r requirements-dev.txt
+tools/test.sh
+```
+
+After an intentional visual change, regenerate the reference images and review them in the diff before committing:
+
+```bash
+tools/test.sh --update-golden
+```
+
+When a reference image differs, the test writes the actual image to `tests/golden/_actual/`; in CI it is attached to the run as the `golden-actual` artifact. GitHub Actions (`.github/workflows/ci.yml`) runs `tools/test.sh` for every pull request into `main` and after each merge.
 
 ## Documentation
 
