@@ -17,6 +17,7 @@ from config import (
     NO_WEDGE_NEEDED_THRESHOLD_CM,
     PITCH_PIXELS_PER_DEGREE,
     REAR_TRACK_MM,
+    SCREEN_TOP_INSET,
     RENDER_INTERVAL_MS,
     SENSOR_STALE_MS,
     WHEELBASE_MM,
@@ -39,13 +40,16 @@ VAN_BODY = 0xFFFF
 VAN_GLASS = 0x35BF
 VAN_TRIM = 0x7BEF
 
-HORIZON_TOP = 40
+HEADER_Y = SCREEN_TOP_INSET
+NAV_Y = HEADER_Y + 21
+NAV_HEIGHT = 17
+HORIZON_TOP = HEADER_Y + 40
 HORIZON_BOTTOM = HEIGHT - 1
 HORIZON_CENTER_X = WIDTH // 2
 HORIZON_CENTER_Y = (HORIZON_TOP + HORIZON_BOTTOM) // 2
 
 # Fixed HORIZON elements.
-CALIBRATE_RECT = (140, 50, 88, 18)
+CALIBRATE_RECT = (140, HORIZON_TOP + 10, 88, 18)
 CALIBRATE_RADIUS = 5
 READOUT_WIDTH = 108
 READOUT_HEIGHT = 36
@@ -124,13 +128,14 @@ def angle_text(values, key):
 
 
 def draw_header(state):
-    g.fill_rect(0, 0, WIDTH, 19, DARK)
-    g.text(7, 5, "MOSTLYLEVEL", WHITE)
+    # Also fills the rows hidden by the case so they never show stale pixels.
+    g.fill_rect(0, 0, WIDTH, HEADER_Y + 19, DARK)
+    g.text(7, HEADER_Y + 5, "MOSTLYLEVEL", WHITE)
 
     battery_percent = sensor.power_percent
-    g.fill_rect(143, 2, 31, 15, DARK)
+    g.fill_rect(143, HEADER_Y + 2, 31, 15, DARK)
     if battery_percent is not None:
-        g.text(149, 5, "%d%%" % battery_percent, GREEN)
+        g.text(149, HEADER_Y + 5, "%d%%" % battery_percent, GREEN)
 
     if state == "LIVE":
         status_colour = GREEN
@@ -145,20 +150,20 @@ def draw_header(state):
         "DISCONNECTED": "NO LINK",
         "NO DATA": "STALE",
     }.get(state, state)
-    g.fill_rect(178, 6, 7, 7, status_colour)
-    g.text(189, 5, status_label, status_colour)
+    g.fill_rect(178, HEADER_Y + 6, 7, 7, status_colour)
+    g.text(189, HEADER_Y + 5, status_label, status_colour)
 
 
 def draw_navigation():
     buttons = (
-        (4, 21, 112, "HORIZON", active_screen == 0),
-        (124, 21, 112, "LEVELLING", active_screen == 1),
+        (4, NAV_Y, 112, "HORIZON", active_screen == 0),
+        (124, NAV_Y, 112, "LEVELLING", active_screen == 1),
     )
     for x, y, width, label, selected in buttons:
         fill = PILL if selected else DARK
         edge = CYAN if selected else GREY
-        g.fill_rect(x, y, width, 17, fill)
-        g.rect(x, y, width, 17, edge)
+        g.fill_rect(x, y, width, NAV_HEIGHT, fill)
+        g.rect(x, y, width, NAV_HEIGHT, edge)
         g.text(x + (width - len(label) * 6) // 2, y + 5, label, WHITE)
 
 
@@ -221,9 +226,9 @@ def draw_corner_view_tabs():
     for index, (x, label) in enumerate(tabs):
         fill = PILL if index == corner_view else DARK
         edge = CYAN if index == corner_view else GREY
-        g.fill_rect(x, 42, 100, 17, fill)
-        g.rect(x, 42, 100, 17, edge)
-        g.text(x + (100 - len(label) * 6) // 2, 47, label, WHITE)
+        g.fill_rect(x, CORNER_TABS_Y, 100, NAV_HEIGHT, fill)
+        g.rect(x, CORNER_TABS_Y, 100, NAV_HEIGHT, edge)
+        g.text(x + (100 - len(label) * 6) // 2, CORNER_TABS_Y + 5, label, WHITE)
 
 
 def corner_lift_heights(values):
@@ -254,7 +259,18 @@ def corner_lift_heights(values):
 
 
 CORNER_ORDER = ("FRONT LEFT", "FRONT RIGHT", "REAR LEFT", "REAR RIGHT")
-CORNER_CONTENT_TOP = 60
+CORNER_TABS_Y = HORIZON_TOP + 2
+CORNER_CONTENT_TOP = HORIZON_TOP + 20
+# Cell rows keep fixed bottom edges and shrink when the top inset grows.
+WEDGE_TOP = HORIZON_TOP + 28
+WEDGE_BOTTOM = 288
+WEDGE_GAP = 20
+WEDGE_HEIGHT = (WEDGE_BOTTOM - WEDGE_TOP - WEDGE_GAP) // 2
+CORNER_TOP = HORIZON_TOP + 22
+CORNER_BOTTOM = 306
+CORNER_GAP = 12
+CORNER_HEIGHT = (CORNER_BOTTOM - CORNER_TOP - CORNER_GAP) // 2
+CORNER_ROW_Y = (CORNER_TOP, CORNER_TOP + CORNER_HEIGHT + CORNER_GAP)
 CORNER_VALUE_HEIGHT = 16  # Scale-2 glyph rows.
 LEVEL_CONTENT = "LEVEL"
 
@@ -288,21 +304,22 @@ def draw_corner_cell(index, label, value, full):
     """Draw one LEVELLING cell; when not full, repaint only its value line."""
     if corner_view == 0:
         x = 4
-        y = (68, 188)[index]
+        y = WEDGE_TOP + index * (WEDGE_HEIGHT + WEDGE_GAP)
         width = 232
-        height = 100
+        height = WEDGE_HEIGHT
         label_text = "%d. %s" % (index + 1, label)
         label_x = x + 12
         label_y = y + 14
-        value_y = y + 43
+        value_y = y + height // 2 - 7
     else:
-        x, y = ((4, 62), (124, 62), (4, 190), (124, 190))[index]
+        x = (4, 124)[index % 2]
+        y = CORNER_ROW_Y[index // 2]
         width = 112
-        height = 116
+        height = CORNER_HEIGHT
         label_text = label
         label_x = x + (width - len(label) * 6) // 2
-        label_y = y + 23
-        value_y = y + 50
+        label_y = y + height // 5
+        value_y = y + height // 2 - 8
 
     if full:
         g.fill_rect(x, y, width, height, DARK)
@@ -317,8 +334,9 @@ def draw_corner_cell(index, label, value, full):
 
 def draw_corner_content(content):
     if content == LEVEL_CONTENT:
-        g.text(69, 157, "NO WEDGES NEEDED", GREEN)
-        g.text(62, 178, "VAN IS LEVEL", WHITE)
+        middle = (WEDGE_TOP + WEDGE_BOTTOM) // 2
+        g.text(69, middle - 21, "NO WEDGES NEEDED", GREEN)
+        g.text(62, middle, "VAN IS LEVEL", WHITE)
         return
     for index, (label, value) in enumerate(content):
         draw_corner_cell(index, label, value, True)
@@ -416,7 +434,7 @@ def draw_sensor_warning(state, message=None):
             message = "WAITING FOR SENSOR"
 
     panel_x = 9
-    panel_y = 143
+    panel_y = HORIZON_CENTER_Y - 36
     panel_width = WIDTH - 18
     panel_height = 34
     g.fill_rect(panel_x, panel_y, panel_width, panel_height, DARK)
@@ -709,7 +727,7 @@ def touch_screen_at(point):
     if point is None:
         return None
     x, y = point
-    if 21 <= y < 38:
+    if NAV_Y <= y < NAV_Y + NAV_HEIGHT:
         if 4 <= x < 116:
             return 0
         if 124 <= x < 236:
@@ -732,7 +750,7 @@ def touch_corner_view_at(point):
     if point is None:
         return None
     x, y = point
-    if 42 <= y < 59:
+    if CORNER_TABS_Y <= y < CORNER_TABS_Y + NAV_HEIGHT:
         if 12 <= x < 112:
             return 0
         if 128 <= x < 228:

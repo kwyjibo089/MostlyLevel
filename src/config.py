@@ -48,6 +48,10 @@ NO_WEDGE_NEEDED_THRESHOLD_CM = 0.5
 
 # Display update tuning.
 PITCH_PIXELS_PER_DEGREE = 1.8
+# Rows at the top of the LCD hidden by the printed case. Header, navigation,
+# and the top of each page move down by this amount; bottom and side
+# positions stay fixed. Owner-observed from a photo (~9 rows hidden).
+SCREEN_TOP_INSET = 10
 LEVEL_FRAME_THRESHOLD_DEG = 0.5
 LEVEL_FRAME_RELEASE_THRESHOLD_DEG = 0.7
 RENDER_INTERVAL_MS = 250

@@ -26,6 +26,8 @@ An initial ILI9341 GRAM readback screenshot attempt produced an all-zero BMP, an
 
 The firmware directory contains `ESP32_GENERIC_S3-20260824-v1.29.0.bin`. This is evidence of a firmware artifact in the repository only; the installed firmware is unknown.
 
+The owner's 3D-printed case covers roughly the top 9 pixel rows of the display (estimated from a photo on 2026-10-15); the sides and bottom were reported as unobstructed. `SCREEN_TOP_INSET` in `src/config.py` moves the top of the UI below that edge.
+
 ## Sensor interface in source
 
 `ble_scan.py` and the app's `ble_read.py` client target BLE address `F0:A0:7A:DB:7D:45`. The client listens for notifications on UUID `0000ffe4-0000-1000-8000-00805f9a34fb` and writes commands using the discovered `FFE9` characteristic. The code names the sensor WT901BLE67; the scanner prints WT901BLECL. These labels have not been reconciled against a device label or datasheet.
