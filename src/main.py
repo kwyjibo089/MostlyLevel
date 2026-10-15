@@ -2,6 +2,7 @@ from ili9341 import ILI9341
 from graphics import Graphics, BLACK, WHITE, CYAN, YELLOW, GREEN, GREY, RED
 from ble_read import WT901BLEClient
 from touch import TouchInput
+from compositor import DisplayList, StripRenderer
 from config import (
     ATTITUDE_REDRAW_THRESHOLD_DEG,
     BATTERY_POLL_INTERVAL_MS,
@@ -10,6 +11,7 @@ from config import (
     DISPLAY_ROLL_SENSOR_KEY,
     DISPLAY_ROLL_SIGN,
     FRONT_TRACK_MM,
+    HORIZON_STRIP_ROWS,
     LEVEL_FRAME_RELEASE_THRESHOLD_DEG,
     LEVEL_FRAME_THRESHOLD_DEG,
     NO_WEDGE_NEEDED_THRESHOLD_CM,
@@ -42,8 +44,7 @@ HORIZON_BOTTOM = HEIGHT - 1
 HORIZON_CENTER_X = WIDTH // 2
 HORIZON_CENTER_Y = (HORIZON_TOP + HORIZON_BOTTOM) // 2
 
-# Fixed HORIZON elements. Live horizon redraws skip these rects so the
-# elements are not erased and repainted on every update.
+# Fixed HORIZON elements.
 CALIBRATE_RECT = (140, 50, 88, 18)
 CALIBRATE_RADIUS = 5
 READOUT_WIDTH = 108
@@ -55,8 +56,6 @@ READOUT_RECTS = (
 )
 READOUT_TEXT_INSET_X = 4
 READOUT_TEXT_INSET_Y = 10
-READOUT_CHAR_WIDTH = 12  # Scale-2 glyph cell.
-READOUT_CHAR_HEIGHT = 16
 FRAME_THICKNESS = 6
 FRAME_RECTS = (
     (0, HORIZON_TOP, WIDTH, FRAME_THICKNESS),
@@ -69,6 +68,23 @@ print("Starting MostlyLevel dashboard")
 lcd = ILI9341()
 lcd.backlight(True)
 g = Graphics(lcd)
+screen_graphics = g
+
+
+def create_horizon_renderer():
+    """Allocate the HORIZON strip buffer early, before the heap fragments."""
+    rows = HORIZON_STRIP_ROWS
+    while rows >= 8:
+        try:
+            return StripRenderer(lcd, HORIZON_TOP, HEIGHT, rows)
+        except MemoryError:
+            print("Strip buffer of %d rows unavailable; trying smaller." % rows)
+            rows //= 2
+    print("Strip rendering unavailable; drawing HORIZON directly.")
+    return None
+
+
+horizon_renderer = create_horizon_renderer()
 sensor = WT901BLEClient()
 try:
     touch = TouchInput()
@@ -95,10 +111,6 @@ def load_level_reference():
 
 pitch_zero, roll_zero = load_level_reference()
 level_frame_active = False
-# What is currently on the HORIZON page, so live updates can skip unchanged parts.
-level_frame_drawn = False
-readout_texts = None
-calibrate_corner_spans = None
 
 
 def clamp(value, low, high):
@@ -202,33 +214,6 @@ def draw_calibrate_button():
         "CALIBRATE",
         BLACK,
     )
-
-
-def calibrate_corner_background(pitch_deg, roll_deg):
-    """Return (x, y, w, colour) spans for the horizon behind the button corners.
-
-    Live redraws skip the whole button rect, so these few corner pixels are
-    repainted separately, and only when their horizon colour changes.
-    """
-    pitch_deg, roll_slope = horizon_geometry(pitch_deg, roll_deg)
-    button_x, button_y, button_width, button_height = CALIBRATE_RECT
-    spans = []
-    for row, inset in enumerate(CALIBRATE_INSETS):
-        if inset <= 0:
-            continue
-        for y in (button_y + row, button_y + button_height - row - 1):
-            for start_x in (button_x, button_x + button_width - inset):
-                span_x = start_x
-                span_colour = None
-                for x in range(start_x, start_x + inset):
-                    colour = horizon_colour_at(x, y, pitch_deg, roll_slope)
-                    if colour != span_colour:
-                        if span_colour is not None:
-                            spans.append((span_x, y, x - span_x, span_colour))
-                        span_x = x
-                        span_colour = colour
-                spans.append((span_x, y, start_x + inset - span_x, span_colour))
-    return tuple(spans)
 
 
 def draw_corner_view_tabs():
@@ -389,9 +374,7 @@ def readout_text(values):
 
 
 def draw_readouts(values):
-    global readout_texts
-    readout_texts = readout_text(values)
-    for (x, y, width, height), text in zip(READOUT_RECTS, readout_texts):
+    for (x, y, width, height), text in zip(READOUT_RECTS, readout_text(values)):
         g.fill_rect(x, y, width, height, PILL)
         g.text(
             x + READOUT_TEXT_INSET_X,
@@ -400,35 +383,6 @@ def draw_readouts(values):
             WHITE,
             scale=2,
         )
-
-
-def update_readouts(values):
-    """Repaint only the readout characters whose text changed."""
-    global readout_texts
-    if readout_texts is None:
-        draw_readouts(values)
-        return
-
-    texts = readout_text(values)
-    for (x, y, width, height), text, old_text in zip(
-        READOUT_RECTS, texts, readout_texts
-    ):
-        if text == old_text:
-            continue
-        text_x = x + READOUT_TEXT_INSET_X
-        text_y = y + READOUT_TEXT_INSET_Y
-        if len(text) != len(old_text):
-            g.fill_rect(x, y, width, height, PILL)
-            g.text(text_x, text_y, text, WHITE, scale=2)
-            continue
-        for index in range(len(text)):
-            if text[index] != old_text[index]:
-                char_x = text_x + index * READOUT_CHAR_WIDTH
-                g.fill_rect(
-                    char_x, text_y, READOUT_CHAR_WIDTH, READOUT_CHAR_HEIGHT, PILL
-                )
-                g.text(char_x, text_y, text[index], WHITE, scale=2)
-    readout_texts = texts
 
 
 def is_level(pitch, roll, was_level=False):
@@ -453,7 +407,6 @@ def draw_status_frame(colour):
 
 
 def draw_sensor_warning(state, message=None):
-    global level_frame_drawn
     if message is None:
         if state == "NO DATA":
             message = "SENSOR DATA STALE"
@@ -471,7 +424,9 @@ def draw_sensor_warning(state, message=None):
     text_x = (WIDTH - len(message) * 6) // 2
     g.text(text_x, panel_y + 13, message, YELLOW)
     draw_status_frame(RED)
-    level_frame_drawn = False
+    if horizon_renderer is not None:
+        # The warning covers part of the composited region.
+        horizon_renderer.invalidate()
 
 
 def horizon_geometry(pitch_deg, roll_deg):
@@ -479,17 +434,6 @@ def horizon_geometry(pitch_deg, roll_deg):
     pitch_deg = clamp(pitch_deg, -35.0, 35.0)
     roll_deg = clamp(roll_deg, -45.0, 45.0)
     return pitch_deg, math.tan(math.radians(roll_deg))
-
-
-def horizon_colour_at(x, y, pitch_deg, roll_slope):
-    """Return the sky/line/ground colour draw_horizon paints at (x, y)."""
-    # draw_horizon samples each 4-pixel column at its centre.
-    boundary = horizon_y((x // 4) * 4 + 2, pitch_deg, roll_slope)
-    if y < boundary:
-        return SKY
-    if y == boundary:
-        return WHITE
-    return GROUND
 
 
 def horizon_y(x, pitch_deg, roll_slope):
@@ -666,28 +610,38 @@ def draw_horizon(pitch_deg, roll_deg):
     draw_van_side(HORIZON_CENTER_Y)
 
 
-def update_horizon_page(pitch, roll, display_values, level_now):
-    """Redraw the moving HORIZON graphics around the fixed elements."""
-    global calibrate_corner_spans, level_frame_drawn
-    exclusions = (CALIBRATE_RECT,) + READOUT_RECTS
-    if level_now:
-        exclusions += FRAME_RECTS
-    g.set_exclusions(exclusions)
+def horizon_page_items(pitch, roll, display_values, level):
+    """Record the HORIZON page below the navigation bar as filled rects."""
+    global g
+    recorder = DisplayList()
+    target_graphics = g
+    g = Graphics(recorder)
     try:
         draw_horizon(pitch, roll)
+        draw_calibrate_button()
+        draw_readouts(display_values)
+        if level:
+            draw_level_frame()
     finally:
-        g.set_exclusions(())
+        g = target_graphics
+    return recorder.items
 
-    spans = calibrate_corner_background(pitch, roll)
-    if spans != calibrate_corner_spans:
-        for x, y, width, colour in spans:
-            g.fill_rect(x, y, width, 1, colour)
-        calibrate_corner_spans = spans
 
-    update_readouts(display_values)
-    if level_now and not level_frame_drawn:
-        draw_level_frame()
-    level_frame_drawn = level_now
+def draw_horizon_page(pitch, roll, display_values, level, force=False):
+    """Draw the HORIZON page, compositing off-screen when possible.
+
+    Every pixel is sent once with its final colour, so moving graphics no
+    longer erase and repaint the elements drawn over them.
+    """
+    items = horizon_page_items(pitch, roll, display_values, level)
+    if horizon_renderer is None or g is not screen_graphics:
+        # Fallback, and screenshots: draw the same rects directly.
+        for item in items:
+            g.fill_rect(*item)
+        return
+    if force:
+        horizon_renderer.invalidate()
+    horizon_renderer.render(items)
 
 
 def vehicle_values(values):
@@ -736,20 +690,15 @@ def set_level_reference(values):
 
 
 def draw_dashboard(values, state):
-    global calibrate_corner_spans, level_frame_drawn
-    level_frame_drawn = False
     g.clear(BLACK)
     draw_header(state)
     draw_navigation()
     if active_screen == 0:
         display_values, pitch, roll = vehicle_values(values)
-        draw_horizon(pitch, roll)
-        draw_calibrate_button()
-        calibrate_corner_spans = calibrate_corner_background(pitch, roll)
-        draw_readouts(display_values)
-        if state == "LIVE" and display_values is not None and level_frame_active:
-            draw_level_frame()
-            level_frame_drawn = True
+        level = (
+            state == "LIVE" and display_values is not None and level_frame_active
+        )
+        draw_horizon_page(pitch, roll, display_values, level, force=True)
     else:
         draw_corner_heights(values)
     if state != "LIVE":
@@ -914,7 +863,7 @@ while True:
             or time.ticks_diff(now, last_render_ms) >= RENDER_INTERVAL_MS
         ):
             if active_screen == 0:
-                update_horizon_page(pitch, roll, display_values, level_now)
+                draw_horizon_page(pitch, roll, display_values, level_now)
             else:
                 update_corner_heights(sensor.latest)
             last_attitude = attitude

@@ -59,32 +59,18 @@ FONT = {
 class Graphics:
     def __init__(self, lcd):
         self.lcd = lcd
-        self.exclusions = ()
-
-    def set_exclusions(self, rects):
-        """Skip drawing inside these (x, y, w, h) rects; pass () to clear."""
-        self.exclusions = tuple(rects)
 
     def clear(self, colour=BLACK):
         self.lcd.fill(colour)
 
     def pixel(self, x, y, colour):
-        if self.exclusions:
-            self.fill_rect(x, y, 1, 1, colour)
-        else:
-            self.lcd.pixel(x, y, colour)
+        self.lcd.pixel(x, y, colour)
 
     def hline(self, x, y, w, colour):
-        if self.exclusions:
-            self.fill_rect(x, y, w, 1, colour)
-        else:
-            self.lcd.hline(x, y, w, colour)
+        self.lcd.hline(x, y, w, colour)
 
     def vline(self, x, y, h, colour):
-        if self.exclusions:
-            self.fill_rect(x, y, 1, h, colour)
-        else:
-            self.lcd.vline(x, y, h, colour)
+        self.lcd.vline(x, y, h, colour)
 
     def rect(self, x, y, w, h, colour):
         self.hline(x, y, w, colour)
@@ -93,36 +79,6 @@ class Graphics:
         self.vline(x + w - 1, y, h, colour)
 
     def fill_rect(self, x, y, w, h, colour):
-        if w <= 0 or h <= 0:
-            return
-        if self.exclusions:
-            self._fill_outside(x, y, w, h, colour, 0)
-        else:
-            self.lcd.fill_rect(x, y, w, h, colour)
-
-    def _fill_outside(self, x, y, w, h, colour, index):
-        """Fill the parts of a rect that lie outside exclusions[index:]."""
-        exclusions = self.exclusions
-        while index < len(exclusions):
-            ex, ey, ew, eh = exclusions[index]
-            index += 1
-            ix0 = max(x, ex)
-            iy0 = max(y, ey)
-            ix1 = min(x + w, ex + ew)
-            iy1 = min(y + h, ey + eh)
-            if ix0 >= ix1 or iy0 >= iy1:
-                continue
-
-            # Split into the pieces above, below, left, and right of the overlap.
-            if y < iy0:
-                self._fill_outside(x, y, w, iy0 - y, colour, index)
-            if iy1 < y + h:
-                self._fill_outside(x, iy1, w, y + h - iy1, colour, index)
-            if x < ix0:
-                self._fill_outside(x, iy0, ix0 - x, iy1 - iy0, colour, index)
-            if ix1 < x + w:
-                self._fill_outside(ix1, iy0, x + w - ix1, iy1 - iy0, colour, index)
-            return
         self.lcd.fill_rect(x, y, w, h, colour)
 
     def text(self, x, y, message, colour=WHITE, scale=1):

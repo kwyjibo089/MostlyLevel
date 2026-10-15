@@ -45,6 +45,7 @@ On the **HORIZON** screen, after leveling the van with a trusted reference, tap 
 - `src/main.py` — dashboard and render loop.
 - `src/ili9341.py` — direct SPI display driver.
 - `src/graphics.py` — drawing helpers and bitmap font.
+- `src/compositor.py` — off-screen strip compositing used for flicker-free HORIZON redraws.
 - `src/screenshot.py` — temporary framebuffer adapter and BMP writer used for screenshots.
 - `src/ble_read.py` — BLE client and packet decoder used by the dashboard; it can also run as a serial diagnostic.
 - `src/config.py` — editable sensor, vehicle geometry, display, touch, and timing settings.
@@ -90,6 +91,7 @@ To copy files one at a time instead:
 .venv/bin/mpremote connect auto fs cp src/main.py :main.py
 .venv/bin/mpremote connect auto fs cp src/ili9341.py :ili9341.py
 .venv/bin/mpremote connect auto fs cp src/graphics.py :graphics.py
+.venv/bin/mpremote connect auto fs cp src/compositor.py :compositor.py
 .venv/bin/mpremote connect auto fs cp src/ble_read.py :ble_read.py
 .venv/bin/mpremote connect auto fs cp src/touch.py :touch.py
 .venv/bin/mpremote connect auto fs cp src/screenshot.py :screenshot.py

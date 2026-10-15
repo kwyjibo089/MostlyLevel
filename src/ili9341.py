@@ -168,6 +168,14 @@ class ILI9341:
             self.spi.write(chunk[:count * 2])
         self.cs(1)
 
+    def blit(self, x, y, w, h, data):
+        """Write a w x h block of big-endian RGB565 pixel data at (x, y)."""
+        self.cs(0)
+        self._send_window(x, y, x + w - 1, y + h - 1)
+        self.dc(1)
+        self.spi.write(data)
+        self.cs(1)
+
     # ---------------------------------------------------------
     # Full-screen operations
     # ---------------------------------------------------------
