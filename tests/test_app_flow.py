@@ -1,0 +1,208 @@
+"""Integration tests: drive app.step() through realistic sessions.
+
+The real BLE client receives events from a simulated sensor, touches come
+from the fake FT5x06 controller, and time comes from the fake clock. Key
+screens are compared with reference images (tests/golden/flow_*.png).
+Sensor packets and touch orientation follow the code's assumptions; they
+are not recordings from the real hardware.
+"""
+
+import sys
+import types
+
+import pytest
+from support.app import SRC_MODULES, load_app
+from support.golden import assert_matches_golden
+from support.sensor import WRITE_HANDLE, SensorSimulator
+
+STEP_MS = 30
+
+
+def step(app, clock, count=1):
+    for _ in range(count):
+        app.step()
+        clock.advance(STEP_MS)
+
+
+def go_live(app, clock, pitch=2.0, roll=-1.0):
+    """Connect the simulated sensor and deliver one attitude sample."""
+    sim = SensorSimulator()
+    step(app, clock)
+    sim.connect()
+    sim.attitude(roll=pitch, pitch=roll)  # Decoded channels, before mapping.
+    step(app, clock)
+    assert app.last_state == "LIVE"
+    return sim
+
+
+def tap(app, clock, touch, point):
+    touch.point = point
+    step(app, clock)
+    touch.point = None
+    step(app, clock)
+
+
+def centre(rect):
+    x, y, width, height = rect
+    return x + width // 2, y + height // 2
+
+
+def test_startup_waits_for_sensor(app, fake_clock, panel, request):
+    step(app, fake_clock)
+    assert app.last_state == "SCANNING"
+    assert_matches_golden(request, "flow_waiting", panel.pixels)
+
+
+def test_live_attitude_and_battery_poll(app, fake_clock, panel, request):
+    from config import SENSOR_POWER_READ_COMMAND
+
+    sim = go_live(app, fake_clock)
+    assert app.last_attitude == (pytest.approx(2.0, abs=0.01), pytest.approx(-1.0, abs=0.01))
+    requests = sim.ble.writes(WRITE_HANDLE)
+    assert [call[3] for call in requests] == [SENSOR_POWER_READ_COMMAND]
+    assert_matches_golden(request, "flow_live", panel.pixels)
+
+    sim.power(385)
+    step(app, fake_clock)
+    assert app.last_battery_percent == 60
+    assert_matches_golden(request, "flow_live_battery", panel.pixels)
+
+    # The battery is polled again only after BATTERY_POLL_INTERVAL_MS (60 s).
+    for _ in range(2):
+        fake_clock.advance(30000)
+        sim.attitude(roll=2.0, pitch=-1.0)
+        step(app, fake_clock)
+    assert len(sim.ble.writes(WRITE_HANDLE)) == 2
+
+
+def test_stale_data_warning_and_recovery(app, fake_clock, panel, request):
+    sim = go_live(app, fake_clock)
+    live_screen = panel.pixels[:]
+
+    fake_clock.advance(1600)  # SENSOR_STALE_MS is 1500.
+    step(app, fake_clock)
+    assert app.last_state == "NO DATA"
+    assert_matches_golden(request, "flow_stale", panel.pixels)
+
+    sim.attitude(roll=2.0, pitch=-1.0)
+    step(app, fake_clock)
+    assert app.last_state == "LIVE"
+    assert panel.pixels == live_screen
+
+
+def test_redraws_are_throttled_and_deadbanded(app, fake_clock, panel):
+    sim = go_live(app, fake_clock)
+
+    panel.pixel_bytes = 0
+    sim.attitude(roll=5.0, pitch=-1.0)
+    step(app, fake_clock)  # Within RENDER_INTERVAL_MS of the last redraw.
+    assert panel.pixel_bytes == 0
+
+    fake_clock.advance(250)
+    sim.attitude(roll=5.0, pitch=-1.0)
+    step(app, fake_clock)
+    assert panel.pixel_bytes > 0
+    assert app.last_attitude[0] == pytest.approx(5.0, abs=0.01)
+
+    fake_clock.advance(250)
+    panel.pixel_bytes = 0
+    sim.attitude(roll=5.1, pitch=-1.0)  # Below the 0.2° redraw threshold.
+    step(app, fake_clock)
+    assert panel.pixel_bytes == 0
+
+
+def test_calibrate_by_touch_saves_reference(
+    app_with_touch, fake_clock, touch, panel, request, reference_file
+):
+    app = app_with_touch
+    go_live(app, fake_clock)
+    sensor_pitch = app.sensor.latest["roll"]
+    sensor_roll = app.sensor.latest["pitch"]
+
+    tap(app, fake_clock, touch, centre(app.CALIBRATE_RECT))
+    assert reference_file.read_text() == "%.5f\n%.5f\n" % (sensor_pitch, sensor_roll)
+    assert app.last_attitude == (0.0, 0.0)
+    assert app.level_frame_active
+    assert_matches_golden(request, "flow_calibrated", panel.pixels)
+
+    # The reference survives a restart.
+    restarted = load_app(reference_file)
+    assert restarted.pitch_zero == pytest.approx(sensor_pitch, abs=1e-5)
+    assert restarted.roll_zero == pytest.approx(sensor_roll, abs=1e-5)
+
+
+def test_calibrate_needs_live_sensor(
+    app_with_touch, fake_clock, touch, panel, request, reference_file
+):
+    app = app_with_touch
+    step(app, fake_clock)
+    tap(app, fake_clock, touch, centre(app.CALIBRATE_RECT))
+    assert not reference_file.exists()
+    assert_matches_golden(request, "flow_calibrate_refused", panel.pixels)
+
+
+def test_touch_navigation(app_with_touch, fake_clock, touch, panel, request):
+    app = app_with_touch
+    go_live(app, fake_clock)
+    nav_y = app.NAV_Y + app.NAV_HEIGHT // 2
+    tabs_y = app.CORNER_TABS_Y + app.NAV_HEIGHT // 2
+
+    tap(app, fake_clock, touch, (180, nav_y))
+    assert app.active_screen == 1
+    tap(app, fake_clock, touch, (180, tabs_y))
+    assert app.corner_view == 1
+    assert_matches_golden(request, "flow_corners", panel.pixels)
+
+    # A held finger triggers only once: sliding onto HORIZON does nothing.
+    touch.point = (180, tabs_y)
+    step(app, fake_clock)
+    touch.point = (60, nav_y)
+    step(app, fake_clock)
+    assert app.active_screen == 1
+    touch.point = None
+    step(app, fake_clock)
+    tap(app, fake_clock, touch, (60, nav_y))
+    assert app.active_screen == 0
+
+
+def test_disconnect_shows_warning(app, fake_clock, panel):
+    from graphics import RED
+
+    sim = go_live(app, fake_clock, pitch=0.1, roll=0.1)
+    assert app.level_frame_active
+    sim.disconnect()
+    step(app, fake_clock)
+    # The client rescans immediately, so the state is SCANNING.
+    assert app.last_state == "SCANNING"
+    assert not app.level_frame_active
+    assert panel.pixel(0, app.HORIZON_TOP) == RED
+
+
+def test_touch_failure_disables_touch(app_with_touch, fake_clock):
+    app = app_with_touch
+
+    def broken_read():
+        raise OSError("I2C bus error")
+
+    app.touch.read = broken_read
+    step(app, fake_clock)
+    assert app.touch is None
+    step(app, fake_clock)  # The loop keeps running without touch.
+
+
+def test_main_entry_point_runs_app(monkeypatch):
+    calls = []
+    fake_app = types.ModuleType("app")
+    fake_app.run = lambda: calls.append("run")
+    fake_app.save_screenshot = object()
+    for module in SRC_MODULES:
+        monkeypatch.delitem(sys.modules, module, raising=False)
+    monkeypatch.setitem(sys.modules, "app", fake_app)
+
+    from support.app import SRC
+
+    namespace = {"__name__": "__main__"}
+    exec(compile((SRC / "main.py").read_text(), "main.py", "exec"), namespace)
+    assert calls == ["run"]
+    # tools/screenshot.sh calls save_screenshot() in the REPL after Ctrl+C.
+    assert namespace["save_screenshot"] is fake_app.save_screenshot

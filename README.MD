@@ -28,7 +28,7 @@ This view ranks the two corners with the largest estimated lift amounts for a tw
 
 ## Current status
 
-- `src/main.py` provides two touch-selectable pages: **HORIZON** for the virtual horizon dashboard and **LEVELLING** for the corner lift estimates. The levelling page has **2 WEDGES** and **4 CORNERS** views; the two-wedge view is selected by default. The top bar shows the latest sensor battery percentage beside the BLE status.
+- `src/app.py` provides two touch-selectable pages: **HORIZON** for the virtual horizon dashboard and **LEVELLING** for the corner lift estimates. The levelling page has **2 WEDGES** and **4 CORNERS** views; the two-wedge view is selected by default. The top bar shows the latest sensor battery percentage beside the BLE status.
 - The display uses decoded pitch and roll from the WT901 BLE client and redraws the readouts and horizon when either changes by at least 0.2°. The status header redraws at startup or when connection or battery status changes. Yaw is not displayed.
 - On the HORIZON page, a green frame turns on when live pitch and roll are both within ±0.5° and stays on until either exceeds ±0.7°. These thresholds are configurable in `src/config.py`; the behavior has not yet been verified on hardware.
 - If the sensor is stale or disconnected, the app displays a prominent warning and red frame instead of leaving a green level indication.
@@ -42,7 +42,8 @@ On the **HORIZON** screen, after leveling the van with a trusted reference, tap 
 
 ## Repository layout
 
-- `src/main.py` — dashboard and render loop.
+- `src/main.py` — startup entry point; imports `app` and calls `app.run()`.
+- `src/app.py` — dashboard, render loop (`setup()`, `step()`, `run()`).
 - `src/ili9341.py` — direct SPI display driver.
 - `src/graphics.py` — drawing helpers and bitmap font.
 - `src/compositor.py` — off-screen strip compositing used for flicker-free HORIZON redraws.
@@ -60,7 +61,7 @@ On the **HORIZON** screen, after leveling the van with a trusted reference, tap 
 
 The repository does not include a dependency manifest or hardware test procedure. The firmware image's presence does not establish that it is installed on a device. Confirm the target board, MicroPython version, and wiring before running the application.
 
-The application entry point is `src/main.py`. It starts the BLE client in `src/ble_read.py`; `src/ble_scan.py` is an optional standalone diagnostic. The configured address, CCCD handle, UUID, and packet format assumptions have not been validated in checked-in hardware test records.
+The application entry point is `src/main.py`, which starts the dashboard in `src/app.py`. The dashboard starts the BLE client in `src/ble_read.py`; `src/ble_scan.py` is an optional standalone diagnostic. The configured address, CCCD handle, UUID, and packet format assumptions have not been validated in checked-in hardware test records.
 
 ### Uploading and running on an ESP32
 
@@ -91,6 +92,7 @@ To copy files one at a time instead:
 ```bash
 .venv/bin/mpremote connect auto fs cp src/config.py :config.py
 .venv/bin/mpremote connect auto fs cp src/main.py :main.py
+.venv/bin/mpremote connect auto fs cp src/app.py :app.py
 .venv/bin/mpremote connect auto fs cp src/ili9341.py :ili9341.py
 .venv/bin/mpremote connect auto fs cp src/graphics.py :graphics.py
 .venv/bin/mpremote connect auto fs cp src/compositor.py :compositor.py
@@ -99,7 +101,7 @@ To copy files one at a time instead:
 .venv/bin/mpremote connect auto fs cp src/screenshot.py :screenshot.py
 ```
 
-The files belong in the root because `main.py` imports the modules by name. `ble_scan.py` is a separate discovery diagnostic and is not needed to run the dashboard.
+The files belong in the root because `main.py` and `app.py` import the modules by name. `ble_scan.py` is a separate discovery diagnostic and is not needed to run the dashboard.
 
 ### Configuration
 
@@ -117,23 +119,20 @@ If automatic connection does not find the board, use the serial port shown by `c
 
 The dashboard requests the sensor power register after BLE becomes live and then once per minute. It shows the latest percentage beside the `LIVE` status; until the first reply, the percentage area stays blank. The conversion uses the voltage-to-percentage bands published for a related WT9011DCL-BT50 model. On the connected unit, raw value `385` decoded to `3.85 V`, matching the Android app's 60% reading. The percentage conversion still needs comparison at other battery levels on this exact sensor.
 
-To use the dashboard battery display, upload the updated `main.py` and `ble_read.py` to the board, then restart it. To inspect the reading manually, upload the updated BLE client, connect the dashboard to the sensor, then open the REPL and interrupt the app with Ctrl+C:
+To use the dashboard battery display, deploy the app with `tools/deploy.sh`. To inspect the reading manually, let the dashboard connect to the sensor, then open the REPL and interrupt the app with Ctrl+C:
 
 ```bash
-.venv/bin/mpremote connect auto fs cp src/config.py :config.py
-.venv/bin/mpremote connect auto fs cp src/ble_read.py :ble_read.py
-.venv/bin/mpremote connect auto fs cp src/main.py :main.py
 .venv/bin/mpremote connect auto repl
 ```
 
 At the MicroPython prompt, request the value and check the response:
 
 ```python
-sensor.request_power_read()
+app.sensor.request_power_read()
 import time
 time.sleep_ms(1000)
-print(sensor.last_power_response)
-print(sensor.power_raw, sensor.power_voltage, sensor.power_percent)
+print(app.sensor.last_power_response)
+print(app.sensor.power_raw, app.sensor.power_voltage, app.sensor.power_percent)
 ```
 
 The connected unit returned a `55 71` register response, with `power_raw` equal to `385`, `power_voltage` equal to `3.85`, and `power_percent` equal to `60`. If these values remain `None` on another attempt, the expected power-register response was not received during that attempt.

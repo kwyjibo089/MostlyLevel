@@ -6,13 +6,8 @@ images with `tools/test.sh --update-golden` and review them in the diff.
 On a mismatch the actual image is written to tests/golden/_actual/.
 """
 
-import pathlib
-
 import pytest
-from support.png import read_png, screen_rgb, write_png
-
-GOLDEN = pathlib.Path(__file__).resolve().parent / "golden"
-ACTUAL = GOLDEN / "_actual"
+from support.golden import assert_matches_golden
 
 
 def sensor_values(pitch, roll):
@@ -41,27 +36,4 @@ def test_scene_matches_golden(app, panel, request, name):
     app.sensor.power_percent = 60
     values = None if attitude is None else sensor_values(*attitude)
     app.draw_dashboard(values, state)
-    actual = screen_rgb(panel.pixels)
-
-    path = GOLDEN / (name + ".png")
-    if request.config.getoption("--update-golden"):
-        GOLDEN.mkdir(exist_ok=True)
-        write_png(path, actual)
-        return
-    if not path.exists():
-        pytest.fail("missing %s; run tools/test.sh --update-golden" % path.name)
-
-    expected = read_png(path)
-    if actual != expected:
-        ACTUAL.mkdir(parents=True, exist_ok=True)
-        write_png(ACTUAL / path.name, actual)
-        differing = sum(
-            1
-            for actual_row, expected_row in zip(actual, expected)
-            for x in range(0, len(actual_row), 3)
-            if actual_row[x:x + 3] != expected_row[x:x + 3]
-        )
-        pytest.fail(
-            "%s differs in %d pixels; see tests/golden/_actual/%s"
-            % (path.name, differing, path.name)
-        )
+    assert_matches_golden(request, name, panel.pixels)

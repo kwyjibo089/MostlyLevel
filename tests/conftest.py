@@ -52,8 +52,21 @@ def fake_clock():
 
 
 @pytest.fixture
-def app():
-    return load_app()
+def reference_file(tmp_path):
+    return tmp_path / "level_reference.cfg"
+
+
+@pytest.fixture
+def app(reference_file):
+    """The dashboard after setup(), with no touch controller fitted."""
+    return load_app(reference_file)
+
+
+@pytest.fixture
+def app_with_touch(reference_file):
+    """The dashboard after setup(), with the FT5x06 controller present."""
+    fakehw.touch.present = True
+    return load_app(reference_file)
 
 
 @pytest.fixture
