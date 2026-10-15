@@ -140,7 +140,16 @@ The connected unit returned a `55 71` register response, with `power_raw` equal 
 
 The app can render the last displayed attitude into small temporary RGB565 strips and save it as `/screenshot.bmp` on the ESP32. It renders in 8-row strips to avoid allocating a full-screen buffer. This reproduces the app's last rendered UI state; it does not read pixels back from the LCD controller. Upload `screenshot.py` as shown above before using this feature.
 
-Open the device REPL and interrupt the running application with Ctrl+C. Then call:
+With the app running on the board, capture the current screen as a PNG in `assets/`:
+
+```bash
+tools/screenshot.sh                # assets/screenshot.png
+tools/screenshot.sh levelling      # assets/levelling.png
+```
+
+The script interrupts the app, calls `save_screenshot()` on the board, copies the BMP to a temporary folder and deletes it from the board, converts it to PNG with ImageMagick (`magick`), and resets the board so the app starts again. The PNG is named after the given name without its extension, so `corners.bmp` and `wedges.png` give `assets/corners.png` and `assets/wedges.png`; on the board, a name without `.bmp` gets `.bmp` appended. Options: `-p PORT` selects a serial port instead of `auto`, and `-n` leaves the app stopped. It uses `mpremote resume` so the board is not soft-reset before the capture, which would clear the screen state being captured.
+
+To capture manually instead, open the device REPL and interrupt the running application with Ctrl+C. Then call:
 
 ```python
 save_screenshot("/screenshot.bmp")
