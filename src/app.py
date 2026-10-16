@@ -63,16 +63,18 @@ HORIZON_TOP = HEADER_Y + 40
 HORIZON_BOTTOM = HEIGHT - 1
 HORIZON_CENTER_X = WIDTH // 2
 HORIZON_CENTER_Y = (HORIZON_TOP + HORIZON_BOTTOM) // 2
+# The HORIZON view sits lower than the page centre, clear of the buttons.
+HORIZON_VIEW_CENTER_Y = HORIZON_CENTER_Y + 22
 
 # Fixed HORIZON elements.
 # ATTITUDE has VAN/HORIZON tabs on the top row (like LEVELLING); the
 # CALIBRATE and language buttons sit on the row below.
-CALIBRATE_RECT = (140, HORIZON_TOP + 24, 88, 18)
+CALIBRATE_RECT = (140, HORIZON_TOP + 30, 88, 18)
 # Language button on HORIZON, left of CALIBRATE on the same line. The header
 # is partly hidden by the printed case, so it is not placed there. Its touch
 # area is a little larger than the button.
-LANGUAGE_RECT = (12, HORIZON_TOP + 24, 44, 18)
-LANGUAGE_TOUCH_RECT = (4, HORIZON_TOP + 21, 60, 26)
+LANGUAGE_RECT = (12, HORIZON_TOP + 30, 44, 18)
+LANGUAGE_TOUCH_RECT = (4, HORIZON_TOP + 23, 60, 28)
 CALIBRATE_RADIUS = 5
 READOUT_WIDTH = 108
 READOUT_HEIGHT = 36
@@ -83,6 +85,21 @@ READOUT_RECTS = (
 )
 READOUT_TEXT_INSET_X = 4
 READOUT_TEXT_INSET_Y = 10
+# Level frame: around the whole visible screen, header and menu included,
+# on every page. 4 px fits beside the menu buttons without covering them.
+LEVEL_FRAME_THICKNESS = 4
+HEADER_BOTTOM = HEADER_Y + 19  # First row below the header's dark fill.
+LEVEL_FRAME_TOP_RECTS = (
+    (0, HEADER_Y, WIDTH, LEVEL_FRAME_THICKNESS),
+    (0, HEADER_Y, LEVEL_FRAME_THICKNESS, HORIZON_TOP - HEADER_Y),
+    (WIDTH - LEVEL_FRAME_THICKNESS, HEADER_Y, LEVEL_FRAME_THICKNESS, HORIZON_TOP - HEADER_Y),
+)
+LEVEL_FRAME_PAGE_RECTS = (
+    (0, HORIZON_TOP, LEVEL_FRAME_THICKNESS, HEIGHT - HORIZON_TOP),
+    (WIDTH - LEVEL_FRAME_THICKNESS, HORIZON_TOP, LEVEL_FRAME_THICKNESS, HEIGHT - HORIZON_TOP),
+    (0, HEIGHT - LEVEL_FRAME_THICKNESS, WIDTH, LEVEL_FRAME_THICKNESS),
+)
+# The red warning frame surrounds the page only.
 FRAME_THICKNESS = 6
 FRAME_RECTS = (
     (0, HORIZON_TOP, WIDTH, FRAME_THICKNESS),
@@ -189,6 +206,8 @@ def draw_header(state):
     status_label = t(status_key) if status_key else state
     g.fill_rect(178, HEADER_Y + 6, 7, 7, status_colour)
     g.text(189, HEADER_Y + 5, status_label, status_colour)
+    if level_frame_active:
+        draw_level_frame_top(True)
 
 
 def draw_navigation():
@@ -437,6 +456,8 @@ def draw_corner_content(content):
 def draw_levelling_page(content):
     draw_corner_view_tabs()
     draw_corner_content(content)
+    if level_frame_active:
+        draw_level_frame()
 
 
 def draw_corner_heights(values):
@@ -536,7 +557,40 @@ def is_level(pitch, roll, was_level=False):
 
 
 def draw_level_frame():
-    draw_status_frame(GREEN)
+    """The level frame's part around the page (composited with the page)."""
+    for x, y, width, height in LEVEL_FRAME_PAGE_RECTS:
+        g.fill_rect(x, y, width, height, GREEN)
+
+
+def draw_level_frame_top(on):
+    """The level frame's part around the header and menu, drawn directly.
+
+    Turning it off restores the background: the header's dark fill and the
+    black rows beside the menu buttons (which start 4 px from the edge).
+    """
+    if on:
+        for x, y, width, height in LEVEL_FRAME_TOP_RECTS:
+            g.fill_rect(x, y, width, height, GREEN)
+        return
+    edge = LEVEL_FRAME_THICKNESS
+    g.fill_rect(0, HEADER_Y, WIDTH, edge, DARK)
+    for x in (0, WIDTH - edge):
+        g.fill_rect(x, HEADER_Y, edge, HEADER_BOTTOM - HEADER_Y, DARK)
+        g.fill_rect(x, HEADER_BOTTOM, edge, HORIZON_TOP - HEADER_BOTTOM, BLACK)
+
+
+def show_level_frame(on):
+    """Turn the level frame on or off without redrawing the page.
+
+    On LEVELLING the page part lies at the screen edge, where that page draws
+    nothing, so it is drawn directly too; the strip cache is then stale.
+    """
+    draw_level_frame_top(on)
+    if active_screen == 1:
+        for x, y, width, height in LEVEL_FRAME_PAGE_RECTS:
+            g.fill_rect(x, y, width, height, GREEN if on else BLACK)
+        if page_renderer is not None:
+            page_renderer.invalidate()
 
 
 def draw_status_frame(colour):
@@ -576,7 +630,7 @@ def horizon_geometry(pitch_deg, roll_deg):
 
 def horizon_y(x, pitch_deg, roll_slope):
     y = int(
-        HORIZON_CENTER_Y
+        HORIZON_VIEW_CENTER_Y
         + pitch_deg * PITCH_PIXELS_PER_DEGREE
         + roll_slope * (x - HORIZON_CENTER_X)
     )
@@ -655,7 +709,7 @@ def tick_rects(px, py, nx, ny, inside, outside):
 def draw_pitch_arc():
     """Draw the fixed curved attitude scale above the moving horizon."""
     cx = HORIZON_CENTER_X
-    baseline = HORIZON_CENTER_Y + 10
+    baseline = HORIZON_VIEW_CENTER_Y + 10
     for x, y, width, height in arc_ring_rects(
         cx, baseline, ARC_RADIUS_X, ARC_RADIUS_Y, ARC_THICKNESS
     ):
@@ -683,7 +737,7 @@ def draw_ladder(pitch_deg, roll_deg):
     roll_slope = math.tan(math.radians(roll_deg))
 
     for mark in (20, 10, -10, -20):
-        base_y = HORIZON_CENTER_Y + pitch_offset - mark * 1.35
+        base_y = HORIZON_VIEW_CENTER_Y + pitch_offset - mark * 1.35
         if base_y < HORIZON_TOP + 3 or base_y > HORIZON_BOTTOM - 3:
             continue
 
@@ -776,13 +830,13 @@ def draw_horizon(pitch_deg, roll_deg):
 
     draw_cached("arc", draw_pitch_arc, bitmap=True)
     draw_ladder(pitch_deg, roll_deg)
-    draw_cached("van_rear", draw_van_rear, HORIZON_CENTER_Y)
+    draw_cached("van_rear", draw_van_rear, HORIZON_VIEW_CENTER_Y)
 
 
 
 # The attitude scenes: the van from behind tilts with roll, the van from
 # the right tilts with pitch, each standing on fixed, level ground.
-REAR_GROUND_Y = HORIZON_TOP + 112
+REAR_GROUND_Y = HORIZON_TOP + 124
 SIDE_GROUND_Y = HEIGHT - READOUT_HEIGHT - 22
 GROUND_DEPTH = 8
 
@@ -1227,7 +1281,9 @@ def step():
                 last_level = level_frame_active
                 last_render_ms = time.ticks_ms()
             elif state_changed:
-                level_frame_active = False
+                if level_frame_active:
+                    level_frame_active = False
+                    draw_level_frame_top(False)
                 last_level = False
                 draw_sensor_warning(state)
         elif sensor.power_percent != last_battery_percent:
@@ -1254,6 +1310,8 @@ def step():
                 draw_horizon_page(pitch, roll, display_values, level_now)
             else:
                 update_corner_heights(sensor.latest)
+            if level_now != last_level:
+                show_level_frame(level_now)
             last_attitude = attitude
             last_level = level_now
             last_render_ms = time.ticks_ms()

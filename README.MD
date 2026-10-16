@@ -30,7 +30,7 @@ This view ranks the two corners with the largest estimated lift amounts for a tw
 
 - `src/app.py` provides two touch-selectable pages: **ATTITUDE** (sub-pages **VAN** and **HORIZON**) and **LEVELLING** for the corner lift estimates. The levelling page has **2 WEDGES** and **4 CORNERS** views; the two-wedge view is selected by default. The top bar shows the latest sensor battery percentage beside the BLE status.
 - The display uses decoded pitch and roll from the WT901 BLE client and redraws the readouts and vans when either changes by at least 0.2°. The status header redraws at startup or when connection or battery status changes. Yaw is not displayed.
-- On the ATTITUDE page, a green frame turns on when live pitch and roll are both within ±0.5° and stays on until either exceeds ±0.7°. These thresholds are configurable in `src/config.py`; the behavior has not yet been verified on hardware.
+- On every page and view, a green frame around the whole screen (header and menu included) turns on when live pitch and roll are both within ±0.5° and stays on until either exceeds ±0.7°. These thresholds are configurable in `src/config.py`; the behavior has not yet been verified on hardware.
 - If the sensor is stale or disconnected, the app displays a prominent warning and red frame instead of leaving a green level indication.
 - Dashboard operation and BLE connection/notification behavior remain unverified. An initial LCD memory-read screenshot attempt returned all-zero pixels; the replacement software-rendered screenshot path has not yet been tested on hardware. Protocol assumptions, physical board variant, and installed firmware also remain unverified.
 
