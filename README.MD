@@ -38,13 +38,13 @@ The **2 WEDGES** view ranks wheel corners by estimated lift and shows the two la
 
 ### Language
 
-On the **HORIZON** screen, tap the cyan language button at the upper left, on the same line as **CALIBRATE** (it shows **EN**, **DE**, **FR**, or **ES**), to switch to the next language; the screen redraws at once and the choice is saved in `/language.cfg` on the ESP32, so it survives restarts. Numbers use a decimal comma in German, French, and Spanish.
+On the **HORIZON** screen, press and hold (about 1 s) the cyan language button at the upper left, on the same line as **CALIBRATE** (it shows **EN**, **DE**, **FR**, or **ES**), to switch to the next language; the screen redraws at once and the choice is saved in `/language.cfg` on the ESP32, so it survives restarts. Numbers use a decimal comma in German, French, and Spanish.
 
 The screen texts live in `src/lang_en.json`, `src/lang_de.json`, `src/lang_fr.json`, and `src/lang_es.json`, one key per text, written in uppercase (MicroPython only upper-cases ASCII letters). To change a text, edit the JSON file and deploy. To add a language, copy `lang_en.json` to `lang_<code>.json`, translate it, and add the code to `LANGUAGES` in `src/config.py`. The tests check that every file has every key, that every text fits its space on screen, and that the font has every character; a missing accented letter can be added to `ACCENTED` in `src/graphics.py`. The German, French, and Spanish texts were drafted by Claude and have not been reviewed by native speakers.
 
 ### Set the level reference
 
-On the **HORIZON** screen, after leveling the van with a trusted reference, tap the rounded yellow **CALIBRATE** button in the upper-right corner above the arc. The app records the current pitch and roll as zero offsets in `/level_reference.cfg` on the ESP32 and uses them after restart. Tap **CALIBRATE** again to replace the reference after changing the sensor mount. The button requires live sensor data. Confirm the result on the physical display before relying on it; this calibration flow has not yet been hardware-verified.
+On the **HORIZON** screen, after leveling the van with a trusted reference, press and hold the rounded yellow **CALIBRATE** button in the upper-right corner above the arc for about one second, until the bar along the button fills. A short tap does nothing, so a stray touch cannot overwrite the reference. The app records the current pitch and roll as zero offsets in `/level_reference.cfg` on the ESP32 and uses them after restart. Hold **CALIBRATE** again to replace the reference after changing the sensor mount. The button requires live sensor data. Confirm the result on the physical display before relying on it; this calibration flow has not yet been hardware-verified.
 
 ## Repository layout
 
