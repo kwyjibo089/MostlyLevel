@@ -33,8 +33,9 @@ SENSOR_BATTERY_PERCENT_BANDS = (
     (340, 5),
 )
 
-# Decoded sensor channels mapped to vehicle axes. Signs are currently +1;
-# confirm the convention after final sensor mounting.
+# Decoded sensor channels mapped to vehicle axes. Hardware-tested 2026-10-16 with
+# the installed sensor: front up gives positive pitch, left up positive roll.
+# Recheck if the sensor is remounted.
 DISPLAY_PITCH_SENSOR_KEY = "roll"
 DISPLAY_PITCH_SIGN = 1.0
 DISPLAY_ROLL_SENSOR_KEY = "pitch"

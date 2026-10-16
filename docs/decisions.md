@@ -10,11 +10,11 @@ This document records choices visible in the current implementation separately f
 | Drive an ILI9341 over SPI with direct writes | Implemented in `src/ili9341.py`; runtime operation is unverified. |
 | Use a 240 × 320 drawing coordinate space and RGB565 colors | Implemented in driver and graphics app. The reference BSP has a conflicting 320 × 240 prose comment, while its constants are 240 × 320. |
 | Display a virtual horizon using pitch and roll; omit the compass | Implemented in `src/app.py`; the BLE decoder still provides yaw but the display does not use it. Physical orientation is unverified. |
-| Swap the sensor's decoded X/roll and Y/pitch channels for vehicle display axes | Implemented in `src/app.py` after the owner reported front lift affecting horizon tilt and left lift appearing as positive pitch. This empirical mapping and its signs still need validation. |
+| Swap the sensor's decoded X/roll and Y/pitch channels for vehicle display axes | Implemented in `src/app.py` after the owner reported front lift affecting horizon tilt and left lift appearing as positive pitch. On 2026-10-16 the owner checked the installed sensor: raising the front gives positive displayed pitch, raising the left side gives positive displayed roll, and the LEVELLING page then asks for lift on the correct (lower) wheels. |
 | Connect to the sensor over BLE using the configured address and UUIDs | Implemented in `src/ble_read.py`; GATT and packet assumptions still require confirmation from live captures. |
 | Read and display sensor battery percentage | `src/app.py` requests register `0x64` every 60 seconds while live and shows the latest percentage beside `LIVE`. Voltage percentage bands come from a related WT9011DCL-BT50 protocol table. On the owner's unit, raw 385 (3.85 V) matched the Android app's 60%; other levels on this exact model remain unverified. |
 | Add touch navigation between pages | `src/app.py` draws `HORIZON` and `LEVELLING` buttons; `src/touch.py` reads an FT5x06-compatible controller using the separate reference BSP's I2C/reset pins. The levelling page toggles between the two largest estimated lift needs and all four corner values. Physical touch operation and orientation remain unverified. |
-| Estimate corner lift heights from pitch and roll | Use owner-provided 4,035 mm wheelbase and 1,810/1,790 mm front/rear track widths. The current formula assumes sensor position at the wheel-footprint center, positive pitch means front-high, and positive roll means left-high; lift values raise each lower corner to the highest corner. Validate these assumptions after installation. |
+| Estimate corner lift heights from pitch and roll | Use owner-provided 4,035 mm wheelbase and 1,810/1,790 mm front/rear track widths. The current formula assumes sensor position at the wheel-footprint center, positive pitch means front-high, and positive roll means left-high; lift values raise each lower corner to the highest corner. The pitch and roll signs were confirmed on the installed van on 2026-10-16, and the owner reported correct wheel selection; the sensor-position assumption and lift accuracy remain unmeasured. |
 | Indicate level attitude on HORIZON | Turn on a green frame while live displayed pitch and roll are each within ±0.5°; retain it until either exceeds ±0.7° to avoid flicker near the threshold. Both thresholds are configurable in `src/config.py`. Physical behavior remains unverified. |
 | Calibrate the display's level reference | The yellow `CALIBRATE` touch button on the HORIZON screen saves current live pitch/roll offsets to `/level_reference.cfg` on the ESP32 and reloads them at startup. The user must first level the van using a trusted reference. Persistence and calibration accuracy are not yet hardware-verified. |
 | Warn when sensor readings are unavailable | Show a red frame and in-screen warning for waiting, stale, disconnected, or error states. Source implements this; physical behavior remains unverified. |
@@ -35,7 +35,7 @@ The display uses a virtual horizon with pitch/roll readouts, a pitch ladder, and
 
 - **Implemented:** source-level functionality described above.
 - **Tested:** automated desktop tests with fake hardware run in CI (see README, "Tests and CI"); they verify source behavior and rendering, not the physical sensor, touch, or display.
-- **Planned:** no formal approved roadmap is present. Confirm BLE notification setup and validate the dashboard's sensor axes/signs on the installed hardware.
+- **Planned:** no formal approved roadmap is present. Confirm BLE notification setup and measure the accuracy of the corner lift estimates on the installed van.
 - **Unverified:** physical hardware identity/wiring, actual BLE behavior and protocol, conversions, and vehicle coordinate conventions.
 
 ## Open questions
@@ -43,7 +43,7 @@ The display uses a virtual horizon with pitch/roll readouts, a pitch ladder, and
 1. Is the physical board specifically an ES3C28P, and is the active software expected to remain MicroPython or migrate to the ESP-IDF BSP?
 2. What exact WT901 model/configuration is used? Are its BLE address and GATT UUIDs stable, and what descriptor enables notifications? The current reader writes to handle 16 without discovery.
 3. Does the sensor emit complete 20-byte `55 61` notifications as assumed? What checksum/framing and scaling rules apply?
-4. Does the swapped virtual-horizon axis mapping produce correct pitch/roll movement and sign in all directions? What zeroing procedure and angle limits are desired?
+4. Resolved 2026-10-16: the swapped axis mapping gives the expected signs (front up positive pitch, left up positive roll). Still open: what angle limits are desired?
 5. Confirm the on-device level-reference file persists across restart and that the calibration procedure gives the expected zero on the installed van.
 6. What hardware test procedure and acceptance criteria define a working display and accurate levelling readout?
 7. Does the related-model voltage-to-percentage table accurately represent the battery level throughout the operating range of this exact sensor? Compare more readings with the Android app.
