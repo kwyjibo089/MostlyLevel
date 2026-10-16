@@ -4,7 +4,7 @@
 The shape follows a Fiat Ducato panel-van campervan (proportions of an
 L3H2: ~5.4 m long, 3.45 m wheelbase): high roof curving into a steeply raked
 windscreen, very short bonnet, big black bumper, black wheel-arch trims and
-side strip, sliding door, and dark-tinted camper windows. No logo.
+side strip, and a sliding door with a dark-tinted window. No logo.
 
 The van is painted from simple shapes (rounded boxes, polygons, circles) on a
 small pixel canvas, given a 1-pixel dark outline, and turned into filled
@@ -107,9 +107,8 @@ def paint():
     ]), BODY)
     rect(22 + ox, 0 + oy, 30 + ox, 1 + oy, TRIM)  # Roof vent.
 
-    # Windows: tinted camper windows in black frames; clear cab window.
-    rounded(8 + ox, 6 + oy, 28 + ox, 16 + oy, 2, PLASTIC)
-    rounded(9 + ox, 7 + oy, 27 + ox, 15 + oy, 1.5, TINT)
+    # Windows: a tinted window in the sliding door (Ducato campers usually
+    # have none further back) in a black frame; clear cab window.
     rounded(36 + ox, 6 + oy, 48 + ox, 16 + oy, 2, PLASTIC)
     rounded(37 + ox, 7 + oy, 47 + ox, 15 + oy, 1.5, TINT)
     polygon(at([(51, 7), (57.5, 7), (64, 16.5), (51, 16.5)]), PLASTIC)
