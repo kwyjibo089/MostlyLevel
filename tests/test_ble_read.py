@@ -167,7 +167,19 @@ def test_disconnect_clears_data_and_rescans(client):
     sim.disconnect()
     assert client.latest is None
     assert client.connected is False
-    # The client restarts scanning immediately, so the dashboard sees
-    # SCANNING rather than DISCONNECTED.
+    # The client restarts scanning immediately and flags the lost link.
     assert client.state == "SCANNING"
+    assert client.link_lost is True
     assert len(scans_started(sim.ble)) == 2
+
+
+def test_link_lost_clears_when_notifications_run_again(client):
+    sim = SensorSimulator()
+    assert client.link_lost is False
+    sim.connect()
+    sim.disconnect()
+    sim.scan_done()  # A timed scan that misses the sensor keeps the flag.
+    assert client.state == "SCANNING" and client.link_lost is True
+    sim.connect()
+    assert client.state == "LIVE"
+    assert client.link_lost is False
