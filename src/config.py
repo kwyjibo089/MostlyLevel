@@ -56,8 +56,8 @@ SCREEN_TOP_INSET = 10
 LEVEL_FRAME_THRESHOLD_DEG = 0.5
 LEVEL_FRAME_RELEASE_THRESHOLD_DEG = 0.7
 # Minimum wait between live redraws, counted from the end of the last one.
-# A HORIZON redraw took ~170-230 ms on the board at 40 MHz (measured
-# 2026-10-16), so the screen updates about every 0.3 s while moving.
+# A HORIZON redraw step took ~130-140 ms on the board at 40 MHz (measured
+# 2026-10-16), so the screen updates about every 0.25 s while moving.
 RENDER_INTERVAL_MS = 100
 ATTITUDE_REDRAW_THRESHOLD_DEG = 0.2
 SENSOR_STALE_MS = 1500
