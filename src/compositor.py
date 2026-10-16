@@ -94,3 +94,25 @@ class StripRenderer:
                 self.view[:self.width * strip_rows * 2],
             )
             self.previous[index] = bucket
+
+    def render_area(self, x, y, w, h, items):
+        """Composite items into one small area and send it in one transfer.
+
+        The area must fit in the strip buffer. Strips it overlaps are marked
+        unknown so the next render() repaints them.
+        """
+        framebuffer = framebuf.FrameBuffer(self.buffer, w, h, framebuf.RGB565)
+        framebuffer.fill(0)
+        for item_x, item_y, item_w, item_h, colour in items:
+            framebuffer.fill_rect(
+                item_x - x,
+                item_y - y,
+                item_w,
+                item_h,
+                ((colour & 0xFF) << 8) | (colour >> 8),
+            )
+        self.lcd.blit(x, y, w, h, self.view[:w * h * 2])
+        first = max(0, (y - self.top) // self.rows)
+        last = min(self.count - 1, (y + h - 1 - self.top) // self.rows)
+        for index in range(first, last + 1):
+            self.previous[index] = None

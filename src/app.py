@@ -78,13 +78,16 @@ FRAME_RECTS = (
 lcd = None
 g = None
 screen_graphics = None
-horizon_renderer = None
+page_renderer = None
 sensor = None
 touch = None
 
 
-def create_horizon_renderer():
-    """Allocate the HORIZON strip buffer early, before the heap fragments."""
+def create_page_renderer():
+    """Allocate the page strip buffer early, before the heap fragments.
+
+    Both pages share it: they cover the same rows below the navigation bar.
+    """
     rows = HORIZON_STRIP_ROWS
     while rows >= 8:
         try:
@@ -92,7 +95,7 @@ def create_horizon_renderer():
         except MemoryError:
             print("Strip buffer of %d rows unavailable; trying smaller." % rows)
             rows //= 2
-    print("Strip rendering unavailable; drawing HORIZON directly.")
+    print("Strip rendering unavailable; drawing pages directly.")
     return None
 
 
@@ -300,26 +303,26 @@ def corner_page_content(values):
     )
 
 
+def corner_cell_geometry(index):
+    """Return (x, y, width, height, value_y) of a cell in the active view."""
+    if corner_view == 0:
+        y = WEDGE_TOP + index * (WEDGE_HEIGHT + WEDGE_GAP)
+        return 4, y, 232, WEDGE_HEIGHT, y + WEDGE_HEIGHT // 2 - 7
+    y = CORNER_ROW_Y[index // 2]
+    return (4, 124)[index % 2], y, 112, CORNER_HEIGHT, y + CORNER_HEIGHT // 2 - 8
+
+
 def draw_corner_cell(index, label, value, full):
     """Draw one LEVELLING cell; when not full, repaint only its value line."""
+    x, y, width, height, value_y = corner_cell_geometry(index)
     if corner_view == 0:
-        x = 4
-        y = WEDGE_TOP + index * (WEDGE_HEIGHT + WEDGE_GAP)
-        width = 232
-        height = WEDGE_HEIGHT
         label_text = "%d. %s" % (index + 1, label)
         label_x = x + 12
         label_y = y + 14
-        value_y = y + height // 2 - 7
     else:
-        x = (4, 124)[index % 2]
-        y = CORNER_ROW_Y[index // 2]
-        width = 112
-        height = CORNER_HEIGHT
         label_text = label
         label_x = x + (width - len(label) * 6) // 2
         label_y = y + height // 5
-        value_y = y + height // 2 - 8
 
     if full:
         g.fill_rect(x, y, width, height, DARK)
@@ -342,17 +345,25 @@ def draw_corner_content(content):
         draw_corner_cell(index, label, value, True)
 
 
+def draw_levelling_page(content):
+    draw_corner_view_tabs()
+    draw_corner_content(content)
+
+
 def draw_corner_heights(values):
     """Draw the complete LEVELLING page below the navigation bar."""
     global corner_content
     corner_content = corner_page_content(values)
+    if compositing():
+        page_renderer.invalidate()
+        page_renderer.render(record_items(draw_levelling_page, corner_content))
+        return
     g.fill_rect(0, HORIZON_TOP, WIDTH, HEIGHT - HORIZON_TOP, BLACK)
-    draw_corner_view_tabs()
-    draw_corner_content(corner_content)
+    draw_levelling_page(corner_content)
 
 
 def update_corner_heights(values):
-    """Repaint only the LEVELLING cells whose displayed text changed."""
+    """Repaint the LEVELLING page where its displayed text changed."""
     global corner_content
     content = corner_page_content(values)
     if content == corner_content:
@@ -360,12 +371,21 @@ def update_corner_heights(values):
 
     previous = corner_content
     corner_content = content
+    composite = compositing()
     if (
         previous is None
         or content == LEVEL_CONTENT
         or previous == LEVEL_CONTENT
         or len(content) != len(previous)
+        or (composite and any(
+            label != old[0] for (label, _), old in zip(content, previous)
+        ))
     ):
+        if composite:
+            # Layout change: composite the page; unchanged strips are skipped.
+            gc.collect()
+            page_renderer.render(record_items(draw_levelling_page, content))
+            return
         g.fill_rect(
             0,
             CORNER_CONTENT_TOP,
@@ -381,7 +401,18 @@ def update_corner_heights(values):
         if label != old_label:
             draw_corner_cell(index, label, value, True)
         elif value != old_value:
-            draw_corner_cell(index, label, value, False)
+            if composite:
+                # Composite just the value line off-screen and send it once.
+                x, y, width, height, value_y = corner_cell_geometry(index)
+                page_renderer.render_area(
+                    x + 1,
+                    value_y,
+                    width - 2,
+                    CORNER_VALUE_HEIGHT,
+                    record_items(draw_corner_cell, index, label, value, False),
+                )
+            else:
+                draw_corner_cell(index, label, value, False)
 
 
 def readout_text(values):
@@ -442,9 +473,9 @@ def draw_sensor_warning(state, message=None):
     text_x = (WIDTH - len(message) * 6) // 2
     g.text(text_x, panel_y + 13, message, YELLOW)
     draw_status_frame(RED)
-    if horizon_renderer is not None:
+    if page_renderer is not None:
         # The warning covers part of the composited region.
-        horizon_renderer.invalidate()
+        page_renderer.invalidate()
 
 
 def horizon_geometry(pitch_deg, roll_deg):
@@ -628,23 +659,33 @@ def draw_horizon(pitch_deg, roll_deg):
     draw_cached("van", draw_van_side, HORIZON_CENTER_Y)
 
 
+def record_items(draw, *args):
+    """Run a drawing function and return its filled rects instead of drawing."""
+    global g
+    target_graphics = g
+    recorder = DisplayList()
+    g = Graphics(recorder)
+    try:
+        draw(*args)
+    finally:
+        g = target_graphics
+    return recorder.items
+
+
+def compositing():
+    """True when pages go through the strip renderer (not for screenshots)."""
+    return page_renderer is not None and g is screen_graphics
+
+
 # Recorded rects of HORIZON layers that never move, keyed by layer name.
 layer_cache = {}
 
 
 def draw_cached(key, draw, *args):
     """Draw a fixed layer, recording its rects only the first time."""
-    global g
     items = layer_cache.get(key)
     if items is None:
-        target_graphics = g
-        recorder = DisplayList()
-        g = Graphics(recorder)
-        try:
-            draw(*args)
-        finally:
-            g = target_graphics
-        items = layer_cache[key] = tuple(recorder.items)
+        items = layer_cache[key] = tuple(record_items(draw, *args))
 
     if isinstance(g.lcd, DisplayList):
         g.lcd.items.extend(items)
@@ -653,21 +694,17 @@ def draw_cached(key, draw, *args):
             g.fill_rect(*item)
 
 
+def draw_horizon_layers(pitch, roll, display_values, level):
+    draw_horizon(pitch, roll)
+    draw_cached("calibrate", draw_calibrate_button)
+    draw_readouts(display_values)
+    if level:
+        draw_cached("level", draw_level_frame)
+
+
 def horizon_page_items(pitch, roll, display_values, level):
     """Record the HORIZON page below the navigation bar as filled rects."""
-    global g
-    recorder = DisplayList()
-    target_graphics = g
-    g = Graphics(recorder)
-    try:
-        draw_horizon(pitch, roll)
-        draw_cached("calibrate", draw_calibrate_button)
-        draw_readouts(display_values)
-        if level:
-            draw_cached("level", draw_level_frame)
-    finally:
-        g = target_graphics
-    return recorder.items
+    return record_items(draw_horizon_layers, pitch, roll, display_values, level)
 
 
 def draw_horizon_page(pitch, roll, display_values, level, force=False):
@@ -677,14 +714,14 @@ def draw_horizon_page(pitch, roll, display_values, level, force=False):
     longer erase and repaint the elements drawn over them.
     """
     items = horizon_page_items(pitch, roll, display_values, level)
-    if horizon_renderer is None or g is not screen_graphics:
+    if not compositing():
         # Fallback, and screenshots: draw the same rects directly.
         for item in items:
             g.fill_rect(*item)
         return
     if force:
-        horizon_renderer.invalidate()
-    horizon_renderer.render(items)
+        page_renderer.invalidate()
+    page_renderer.render(items)
 
 
 def vehicle_values(values):
@@ -733,7 +770,11 @@ def set_level_reference(values):
 
 
 def draw_dashboard(values, state):
-    g.clear(BLACK)
+    if not (compositing() and screen_initialized):
+        g.clear(BLACK)
+    # Otherwise skip the clear, which would flash the screen black: the
+    # header and navigation repaint themselves, the rows between them stay
+    # black, and the compositor repaints the whole page area below.
     draw_header(state)
     draw_navigation()
     if active_screen == 0:
@@ -838,7 +879,7 @@ touch_was_down = False
 
 def setup():
     """Create the display, strip buffer, sensor client, and touch reader."""
-    global lcd, g, screen_graphics, horizon_renderer, sensor, touch
+    global lcd, g, screen_graphics, page_renderer, sensor, touch
     global pitch_zero, roll_zero
 
     print("Starting MostlyLevel dashboard")
@@ -847,7 +888,7 @@ def setup():
     lcd.backlight(True)
     g = Graphics(lcd)
     screen_graphics = g
-    horizon_renderer = create_horizon_renderer()
+    page_renderer = create_page_renderer()
     sensor = WT901BLEClient()
     try:
         touch = TouchInput()
