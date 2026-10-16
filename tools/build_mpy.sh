@@ -5,8 +5,8 @@
 #   main.py    MicroPython only runs main.py from source at startup.
 #   config.py  kept as source so settings stay readable and editable.
 #   ble_scan.py  standalone diagnostic, not part of the app.
-# Precompiled modules load faster and avoid compiling app.py on the board,
-# which needs RAM and fragments the heap.
+# Precompiled modules import faster (~0.2 s instead of ~0.7 s on the board)
+# and avoid compiling app.py there; steady-state RAM is about the same.
 #
 # Usage:
 #   tools/build_mpy.sh              # writes build/mpy/
