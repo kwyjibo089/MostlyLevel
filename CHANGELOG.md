@@ -4,6 +4,7 @@ Notable project changes are recorded here. This file was introduced with the ini
 
 ## Unreleased
 
+- The green level frame now surrounds the whole screen (header and menu included) and shows on every page and sub-page, LEVELLING too; it is 4 px wide so it does not cover the menu buttons. More space on ATTITUDE: CALIBRATE and the language button sit further below the VAN/HORIZON tabs, the rear van on VAN moved down, and the HORIZON view moved down into the ground area so the arc is no longer covered by CALIBRATE (owner request). Reference images regenerated and reviewed.
 - The first page is now **ATTITUDE**, with two sub-pages chosen by tabs at its top, like LEVELLING (owner request):
   - **VAN** (default): the tilting rear and side views of the van;
   - **HORIZON**: the earlier virtual horizon, restored as it was (moving sky and ground, pitch ladder, curved scale), with the van seen from behind as the fixed symbol instead of the side view.
