@@ -24,6 +24,6 @@
   "warning_disconnected": "SENSOR DESCONECTADO",
   "warning_waiting": "ESPERANDO EL SENSOR",
   "warning_calibrate_needs_sensor": "CALIBRAR REQUIERE SENSOR",
-  "pitch_short": "L",
-  "roll_short": "T"
+  "pitch_short": "P",
+  "roll_short": "R"
 }
