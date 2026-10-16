@@ -24,6 +24,6 @@
   "warning_disconnected": "SENSOR GETRENNT",
   "warning_waiting": "WARTE AUF SENSOR",
   "warning_calibrate_needs_sensor": "KALIBRIEREN NUR MIT SENSOR",
-  "pitch_short": "L",
-  "roll_short": "Q"
+  "pitch_short": "P",
+  "roll_short": "R"
 }

@@ -24,6 +24,6 @@
   "warning_disconnected": "CAPTEUR DÉCONNECTÉ",
   "warning_waiting": "EN ATTENTE DU CAPTEUR",
   "warning_calibrate_needs_sensor": "CALIBRAGE: CAPTEUR REQUIS",
-  "pitch_short": "T",
+  "pitch_short": "P",
   "roll_short": "R"
 }
