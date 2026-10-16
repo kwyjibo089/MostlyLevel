@@ -4,6 +4,7 @@ Notable project changes are recorded here. This file was introduced with the ini
 
 ## Unreleased
 
+- The HORIZON camper now looks like a Fiat Ducato panel-van campervan (owner request): high roof curving into a raked windscreen, very short bonnet, big swept headlight, black bumper, wheel-arch trims and side strip, sliding door with rail, dark-tinted camper windows, and upright rear lights. Proportions follow an L3H2 (~5.4 m long, 3.45 m wheelbase); no logo. Same cost on the board as before (it is one 4-bit picture). Reference images regenerated and reviewed.
 - Nicer HORIZON graphics:
   - the pitch arc is a smooth ring of constant width, with ticks pointing at the centre and labels following the curve (no labels at the ±40 ends);
   - the camper is redrawn from shapes: rounded body, sloped windscreen, round wheels with rims, wheel arches, and a clean outline (`tools/make_van.py` generates `src/van_sprite.py`).

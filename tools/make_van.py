@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """Generate src/van_sprite.py, the camper drawn on the HORIZON page.
 
+The shape follows a Fiat Ducato panel-van campervan (proportions of an
+L3H2: ~5.4 m long, 3.45 m wheelbase): high roof curving into a steeply raked
+windscreen, very short bonnet, big black bumper, black wheel-arch trims and
+side strip, sliding door, and dark-tinted camper windows. No logo.
+
 The van is painted from simple shapes (rounded boxes, polygons, circles) on a
 small pixel canvas, given a 1-pixel dark outline, and turned into filled
 rects with identical runs on adjacent rows merged. Doing this on the desktop
@@ -21,7 +26,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from graphics import merge_runs  # noqa: E402
 
 TARGET = ROOT / "src" / "van_sprite.py"
-WIDTH, HEIGHT = 76, 40
+WIDTH, HEIGHT = 80, 42
 
 # RGB565 colours, matching app.py where the same colour is used there.
 DARK = 0x2104
@@ -32,6 +37,9 @@ TYRE = 0x0000
 HUB = 0xC618
 HEADLIGHT = 0xFFE0
 TAIL_LIGHT = 0xF800
+PLASTIC = 0x18E3  # Black bumpers, trims, and window frames.
+TINT = 0x3186  # Dark-tinted camper windows.
+LENS = 0xE73C  # Clear headlight lens.
 
 canvas = [[None] * WIDTH for _ in range(HEIGHT)]
 
@@ -87,27 +95,56 @@ def paint():
     def at(points):
         return [(x + ox, y + oy) for x, y in points]
 
-    # Camper box, cab with sloped windscreen and short bonnet.
-    rounded(2 + ox, 2 + oy, 52 + ox, 27 + oy, 5, BODY, bottom_radius=2)
-    polygon(at([(48, 9), (59, 9), (66, 17), (71, 19.5), (72, 22), (72, 28), (48, 28)]), BODY)
-    rect(20 + ox, 0 + oy, 31 + ox, 1 + oy, TRIM)  # Roof vent.
-    # Two habitation windows and the cab side window.
-    rounded(7 + ox, 6 + oy, 21 + ox, 13 + oy, 1.5, GLASS)
-    rounded(25 + ox, 6 + oy, 42 + ox, 13 + oy, 1.5, GLASS)
-    polygon(at([(50, 11), (58, 11), (64, 18), (64, 19), (50, 19)]), GLASS)
-    rect(46 + ox, 12 + oy, 46 + ox, 20 + oy, TRIM)  # Sliding door seam.
-    rect(42 + ox, 17 + oy, 44 + ox, 17 + oy, TRIM)  # Door handle.
-    rect(3 + ox, 21 + oy, 71 + ox, 22 + oy, TRIM)  # Accent stripe.
-    rect(69 + ox, 19 + oy, 71 + ox, 20 + oy, HEADLIGHT)
-    rect(2 + ox, 15 + oy, 3 + ox, 18 + oy, TAIL_LIGHT)
-    rounded(65 + ox, 25 + oy, 72 + ox, 28 + oy, 1, TRIM)  # Front bumper.
-    # Wheel arches (cut out, then outlined), tyres, rims, and hubs.
-    for wheel_x in (16, 58):
-        cx, cy = wheel_x + ox, 29 + oy
-        circle(cx, cy, 7.5, None)
+    sill = 31  # Bottom edge of the body.
+    rear_wheel, front_wheel = 15, 61  # 46 px wheelbase, short overhangs.
+
+    # Body: high roof with rounded rear corner, roof curving down into the
+    # raked windscreen, very short sloped bonnet, upright nose.
+    polygon(at([
+        (2, 8), (2.4, 5.5), (3.6, 3.6), (5.5, 2.4), (8, 2), (50, 2), (54, 2.5), (57, 4), (59, 6),
+        (67, 17), (71, 19), (73, 20.5), (74.5, 22.5), (75, 24),
+        (75, sill), (2, sill),
+    ]), BODY)
+    rect(22 + ox, 0 + oy, 30 + ox, 1 + oy, TRIM)  # Roof vent.
+
+    # Windows: tinted camper windows in black frames; clear cab window.
+    rounded(8 + ox, 6 + oy, 28 + ox, 16 + oy, 2, PLASTIC)
+    rounded(9 + ox, 7 + oy, 27 + ox, 15 + oy, 1.5, TINT)
+    rounded(36 + ox, 6 + oy, 48 + ox, 16 + oy, 2, PLASTIC)
+    rounded(37 + ox, 7 + oy, 47 + ox, 15 + oy, 1.5, TINT)
+    polygon(at([(51, 7), (57.5, 7), (64, 16.5), (51, 16.5)]), PLASTIC)
+    polygon(at([(52, 8), (57, 8), (62.5, 15.5), (52, 15.5)]), GLASS)
+    polygon(at([(61, 11), (64.5, 11.5), (64.5, 16), (62, 16)]), PLASTIC)  # Mirror.
+
+    # Panel lines: sliding door, B-pillar, and the sliding-door rail.
+    rect(34 + ox, 4 + oy, 34 + ox, 29 + oy, TRIM)
+    rect(50 + ox, 6 + oy, 50 + ox, 29 + oy, TRIM)
+    rect(5 + ox, 18 + oy, 33 + ox, 18 + oy, TRIM)
+    rect(36 + ox, 20 + oy, 38 + ox, 20 + oy, TRIM)  # Sliding door handle.
+    rect(52 + ox, 19 + oy, 54 + ox, 19 + oy, TRIM)  # Cab door handle.
+
+    # Lights: big swept-back headlight, upright rear lights.
+    polygon(at([(65.5, 17), (73, 19.8), (75, 23.8), (66.5, 21.8)]), PLASTIC)
+    polygon(at([(67, 18.2), (72.5, 20.4), (73.8, 22.9), (67.6, 21)]), LENS)
+    rect(72 + ox, 21 + oy, 73 + ox, 22 + oy, HEADLIGHT)
+    rect(2 + ox, 19 + oy, 3 + ox, 27 + oy, TAIL_LIGHT)
+
+    # Black plastic: front bumper, rear bumper corner, side strip.
+    polygon(at([(68, 24), (75, 24), (75, sill), (69, sill)]), PLASTIC)
+    rect(2 + ox, 28 + oy, 6 + ox, sill - 1 + oy, PLASTIC)
+    rect(24 + ox, 25 + oy, 52 + ox, 26 + oy, PLASTIC)
+
+    # Wheel arches with black trims, then tyres, steel rims, and hubs.
+    for wheel_x in (rear_wheel, front_wheel):
+        cx, cy = wheel_x + ox, sill + oy
+        for y in range(HEIGHT):
+            for x in range(WIDTH):
+                distance = (x + 0.5 - cx) ** 2 + (y + 0.5 - cy) ** 2
+                if distance <= 8.5 ** 2 and y < sill + oy:
+                    canvas[y][x] = PLASTIC if distance > 7.5 ** 2 else None
         circle(cx, cy, 6.5, TYRE)
-        circle(cx, cy, 4.0, TRIM)
-        circle(cx, cy, 1.6, HUB)
+        circle(cx, cy, 4.2, TRIM)
+        circle(cx, cy, 2.0, HUB)
 
     # Outline: empty cells touching the van, also diagonally, turn dark.
     solid = [[colour is not None for colour in row] for row in canvas]
@@ -159,7 +196,12 @@ def source():
         "VAN_WIDTH = %d" % WIDTH,
         "VAN_HEIGHT = %d" % HEIGHT,
         "# RGB565 colour per pixel value; 0 is transparent.",
-        "VAN_COLOURS = (None, %s)" % ", ".join("0x%04X" % colour for colour in colours),
+        "VAN_COLOURS = (",
+        "    None,",
+    ]
+    lines += ["    0x%04X," % colour for colour in colours]
+    lines += [
+        ")",
         "# GS4_HMSB rows, %d bytes each." % ((WIDTH + 1) // 2),
         "VAN_PIXELS = (",
     ]
