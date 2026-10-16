@@ -55,6 +55,27 @@ FONT = {
     'Z': (97, 81, 73, 69, 67),
 }
 
+# Horizontal pixel runs per character, filled in on first use.
+GLYPH_RUNS = {}
+
+
+def glyph_runs(glyph):
+    """Return a glyph's set pixels as (column, row, width) runs, row by row."""
+    runs = []
+    for row in range(8):
+        col = 0
+        while col < len(glyph):
+            if not glyph[col] & (1 << row):
+                col += 1
+                continue
+
+            run_start = col
+            col += 1
+            while col < len(glyph) and glyph[col] & (1 << row):
+                col += 1
+            runs.append((run_start, row, col - run_start))
+    return tuple(runs)
+
 
 class Graphics:
     def __init__(self, lcd):
@@ -84,31 +105,24 @@ class Graphics:
     def text(self, x, y, message, colour=WHITE, scale=1):
         cursor_x = x
 
+        fill_rect = self.fill_rect
+
         for char in str(message).upper():
-            glyph = FONT.get(char)
+            runs = GLYPH_RUNS.get(char)
+            if runs is None:
+                glyph = FONT.get(char)
+                if glyph is None:
+                    cursor_x += 6 * scale
+                    continue
+                runs = GLYPH_RUNS[char] = glyph_runs(glyph)
 
-            if glyph is None:
-                cursor_x += 6 * scale
-                continue
-
-            for row in range(8):
-                col = 0
-                while col < len(glyph):
-                    if not glyph[col] & (1 << row):
-                        col += 1
-                        continue
-
-                    run_start = col
-                    col += 1
-                    while col < len(glyph) and glyph[col] & (1 << row):
-                        col += 1
-
-                    self.fill_rect(
-                        cursor_x + run_start * scale,
-                        y + row * scale,
-                        (col - run_start) * scale,
-                        scale,
-                        colour,
-                    )
+            for col, row, width in runs:
+                fill_rect(
+                    cursor_x + col * scale,
+                    y + row * scale,
+                    width * scale,
+                    scale,
+                    colour,
+                )
 
             cursor_x += 6 * scale

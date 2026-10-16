@@ -29,6 +29,7 @@ from config import (
     WHEELBASE_MM,
 )
 
+import gc
 import math
 import time
 
@@ -622,9 +623,34 @@ def draw_horizon(pitch_deg, roll_deg):
             run_x = x
             run_y = next_y
 
-    draw_pitch_arc()
+    draw_cached("arc", draw_pitch_arc)
     draw_ladder(pitch_deg, roll_deg)
-    draw_van_side(HORIZON_CENTER_Y)
+    draw_cached("van", draw_van_side, HORIZON_CENTER_Y)
+
+
+# Recorded rects of HORIZON layers that never move, keyed by layer name.
+layer_cache = {}
+
+
+def draw_cached(key, draw, *args):
+    """Draw a fixed layer, recording its rects only the first time."""
+    global g
+    items = layer_cache.get(key)
+    if items is None:
+        target_graphics = g
+        recorder = DisplayList()
+        g = Graphics(recorder)
+        try:
+            draw(*args)
+        finally:
+            g = target_graphics
+        items = layer_cache[key] = tuple(recorder.items)
+
+    if isinstance(g.lcd, DisplayList):
+        g.lcd.items.extend(items)
+    else:
+        for item in items:
+            g.fill_rect(*item)
 
 
 def horizon_page_items(pitch, roll, display_values, level):
@@ -635,10 +661,10 @@ def horizon_page_items(pitch, roll, display_values, level):
     g = Graphics(recorder)
     try:
         draw_horizon(pitch, roll)
-        draw_calibrate_button()
+        draw_cached("calibrate", draw_calibrate_button)
         draw_readouts(display_values)
         if level:
-            draw_level_frame()
+            draw_cached("level", draw_level_frame)
     finally:
         g = target_graphics
     return recorder.items
@@ -913,6 +939,10 @@ def step():
             or time.ticks_diff(now, last_render_ms) >= RENDER_INTERVAL_MS
         ):
             if active_screen == 0:
+                # A redraw allocates a few hundred small tuples. Collecting
+                # first is faster than the repeated emergency collections a
+                # fragmented heap otherwise triggers during the redraw.
+                gc.collect()
                 draw_horizon_page(pitch, roll, display_values, level_now)
             else:
                 update_corner_heights(sensor.latest)

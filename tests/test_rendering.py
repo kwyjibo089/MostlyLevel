@@ -150,3 +150,45 @@ def test_screenshot_matches_screen(app, panel, tmp_path):
     for index, colour in enumerate(panel.pixels):
         red, green, blue = rgb565_to_rgb(colour)
         assert pixels[index * 3:index * 3 + 3] == bytes((blue, green, red)), index
+
+
+def test_cached_layers_match_fresh_drawing(app):
+    """Fixed HORIZON layers are recorded once and replayed unchanged."""
+    from compositor import DisplayList
+    from graphics import Graphics
+
+    def fresh(draw, *args):
+        saved = app.g
+        recorder = DisplayList()
+        app.g = Graphics(recorder)
+        try:
+            draw(*args)
+        finally:
+            app.g = saved
+        return recorder.items
+
+    app.layer_cache.clear()
+    first = app.horizon_page_items(3.0, -2.0, {"pitch": 3.0, "roll": -2.0}, True)
+    assert set(app.layer_cache) == {"arc", "van", "calibrate", "level"}
+    assert list(app.layer_cache["arc"]) == fresh(app.draw_pitch_arc)
+    assert list(app.layer_cache["van"]) == fresh(app.draw_van_side, app.HORIZON_CENTER_Y)
+    assert list(app.layer_cache["calibrate"]) == fresh(app.draw_calibrate_button)
+    assert list(app.layer_cache["level"]) == fresh(app.draw_level_frame)
+
+    calls = []
+    app.draw_pitch_arc = lambda: calls.append("arc")
+    again = app.horizon_page_items(3.0, -2.0, {"pitch": 3.0, "roll": -2.0}, True)
+    assert calls == [] and again == first
+
+
+def test_glyph_runs_cover_exactly_the_set_pixels():
+    from graphics import FONT, glyph_runs
+
+    for glyph in FONT.values():
+        pixels = {
+            (x, row) for col, row, width in glyph_runs(glyph) for x in range(col, col + width)
+        }
+        expected = {
+            (col, row) for col, bits in enumerate(glyph) for row in range(8) if bits & (1 << row)
+        }
+        assert pixels == expected

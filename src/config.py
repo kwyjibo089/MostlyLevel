@@ -55,7 +55,10 @@ PITCH_PIXELS_PER_DEGREE = 1.8
 SCREEN_TOP_INSET = 10
 LEVEL_FRAME_THRESHOLD_DEG = 0.5
 LEVEL_FRAME_RELEASE_THRESHOLD_DEG = 0.7
-RENDER_INTERVAL_MS = 250
+# Minimum wait between live redraws, counted from the end of the last one.
+# A HORIZON redraw took ~170-230 ms on the board at 40 MHz (measured
+# 2026-10-16), so the screen updates about every 0.3 s while moving.
+RENDER_INTERVAL_MS = 100
 ATTITUDE_REDRAW_THRESHOLD_DEG = 0.2
 SENSOR_STALE_MS = 1500
 BATTERY_POLL_INTERVAL_MS = 60000
@@ -65,7 +68,9 @@ HORIZON_STRIP_ROWS = 40
 
 # ILI9341 SPI wiring for the current board setup.
 LCD_SPI_ID = 2
-LCD_SPI_BAUDRATE = 20000000
+# 40 MHz matches the reference BSP's LCD pixel clock for this board. Ran on
+# the board 2026-10-16 (previously 20 MHz); image quality not yet confirmed.
+LCD_SPI_BAUDRATE = 40000000
 LCD_SPI_SCK_PIN = 12
 LCD_SPI_MOSI_PIN = 11
 LCD_SPI_MISO_PIN = 13
