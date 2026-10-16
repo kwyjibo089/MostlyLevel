@@ -65,6 +65,11 @@ HORIZON_CENTER_Y = (HORIZON_TOP + HORIZON_BOTTOM) // 2
 
 # Fixed HORIZON elements.
 CALIBRATE_RECT = (140, HORIZON_TOP + 10, 88, 18)
+# Language button on HORIZON, left of CALIBRATE on the same line. The header
+# is partly hidden by the printed case, so it is not placed there. Its touch
+# area is a little larger than the button.
+LANGUAGE_RECT = (12, HORIZON_TOP + 10, 44, 18)
+LANGUAGE_TOUCH_RECT = (4, HORIZON_TOP + 4, 60, 30)
 CALIBRATE_RADIUS = 5
 READOUT_WIDTH = 108
 READOUT_HEIGHT = 36
@@ -157,24 +162,12 @@ STATUS_KEYS = {
     "ERROR": "status_error",
     "IDLE": "status_idle",
 }
-LANGUAGE_RECT = (98, HEADER_Y + 2, 26, 15)
-# Touch area of the language chip: larger than the chip, up to the nav bar.
-LANGUAGE_TOUCH_RECT = (84, 0, 56, NAV_Y)
-
-
-def draw_language_chip():
-    x, y, width, height = LANGUAGE_RECT
-    g.fill_rect(x, y, width, height, PILL)
-    g.rect(x, y, width, height, CYAN)
-    code = (i18n.language or "--").upper()
-    g.text(x + (width - len(code) * 6) // 2 + 1, y + 4, code, WHITE)
 
 
 def draw_header(state):
     # Also fills the rows hidden by the case so they never show stale pixels.
     g.fill_rect(0, 0, WIDTH, HEADER_Y + 19, DARK)
     g.text(7, HEADER_Y + 5, "MOSTLYLEVEL", WHITE)
-    draw_language_chip()
 
     battery_percent = sensor.power_percent
     g.fill_rect(143, HEADER_Y + 2, 31, 15, DARK)
@@ -221,22 +214,22 @@ def calibrate_corner_insets():
 CALIBRATE_INSETS = calibrate_corner_insets()
 
 
-def draw_calibrate_button():
-    button_x, button_y, button_width, button_height = CALIBRATE_RECT
+def draw_rounded_button(rect, colour, label):
+    button_x, button_y, button_width, button_height = rect
     radius = CALIBRATE_RADIUS
     g.fill_rect(
         button_x + radius,
         button_y,
         button_width - radius * 2,
         button_height,
-        YELLOW,
+        colour,
     )
     g.fill_rect(
         button_x,
         button_y + radius,
         button_width,
         button_height - radius * 2,
-        YELLOW,
+        colour,
     )
     for row, inset in enumerate(CALIBRATE_INSETS):
         g.fill_rect(
@@ -244,22 +237,29 @@ def draw_calibrate_button():
             button_y + row,
             button_width - inset * 2,
             1,
-            YELLOW,
+            colour,
         )
         g.fill_rect(
             button_x + inset,
             button_y + button_height - row - 1,
             button_width - inset * 2,
             1,
-            YELLOW,
+            colour,
         )
-    label = t("calibrate")
     g.text(
         button_x + (button_width - len(label) * 6) // 2,
         button_y + 5,
         label,
         BLACK,
     )
+
+
+def draw_calibrate_button():
+    draw_rounded_button(CALIBRATE_RECT, YELLOW, t("calibrate"))
+
+
+def draw_language_button():
+    draw_rounded_button(LANGUAGE_RECT, CYAN, (i18n.language or "--").upper())
 
 
 def draw_corner_view_tabs():
@@ -752,6 +752,7 @@ def draw_cached(key, draw, *args):
 def draw_horizon_layers(pitch, roll, display_values, level):
     draw_horizon(pitch, roll)
     draw_cached("calibrate", draw_calibrate_button)
+    draw_cached("language", draw_language_button)
     draw_readouts(display_values)
     if level:
         draw_cached("level", draw_level_frame)
@@ -857,7 +858,7 @@ def touch_screen_at(point):
 
 
 def touch_language_at(point):
-    if point is None:
+    if point is None or active_screen != 0:
         return False
     x, y = point
     touch_x, touch_y, touch_width, touch_height = LANGUAGE_TOUCH_RECT
@@ -876,7 +877,7 @@ def switch_language(values, state):
         i18n.save()
     except OSError as exc:
         print("Language active until restart; save failed:", exc)
-    layer_cache.clear()  # The CALIBRATE button holds translated text.
+    layer_cache.clear()  # The buttons hold translated text.
     draw_dashboard(values, state)
 
 

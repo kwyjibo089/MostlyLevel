@@ -4,6 +4,7 @@ Notable project changes are recorded here. This file was introduced with the ini
 
 ## Unreleased
 
+- Moved the language switch from the header, where the printed case made it almost unreachable, to a cyan rounded button on the HORIZON page, left of CALIBRATE on the same line; its touch area is slightly larger than the button. The header looks as it did before languages were added. Reference images regenerated and reviewed.
 - Screen texts moved to per-language files with German, French, and Spanish translations, switchable at runtime. Tap the new language chip in the header to cycle EN → DE → FR → ES; the choice is saved in `/language.cfg`. Texts are in `src/lang_<code>.json` and loaded by the new `src/i18n.py` (only the active language stays in memory); `LANGUAGES` and `DEFAULT_LANGUAGE` are in `config.py`. Numbers use a decimal comma in German, French, and Spanish. The font gained a comma and accented capitals (Ä Ö Ü À Á É È Ê Í Ó Ú Ñ Ç), drawn as full-height letters with the accent above the line. Other visible changes:
   - the header status labels are shorter so they fit (`CONNECTING` was cut off; now `LINKING`, and `GATT` became `SETUP`);
   - the LEVELLING "no wedges needed" message is centred.

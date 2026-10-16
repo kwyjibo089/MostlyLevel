@@ -131,3 +131,22 @@ def test_tapping_the_chip_switches_language(app_with_touch, fake_clock, touch, p
     assert app.layer_cache["calibrate"] == tuple(
         app.record_items(app.draw_calibrate_button)
     )
+
+
+def test_language_button_is_only_on_horizon(app):
+    x, y, width, height = app.LANGUAGE_RECT
+    centre = (x + width // 2, y + height // 2)
+    app.active_screen = 0
+    assert app.touch_language_at(centre)
+    app.active_screen = 1
+    assert not app.touch_language_at(centre)
+
+
+def test_language_touch_area_stays_clear_of_calibrate(app):
+    tx, ty, tw, th = app.LANGUAGE_TOUCH_RECT
+    cx, cy, cw, ch = app.CALIBRATE_RECT
+    assert tx + tw <= cx or cx + cw <= tx or ty + th <= cy or cy + ch <= ty
+    # The visible button lies inside its touch area, below the navigation bar.
+    x, y, width, height = app.LANGUAGE_RECT
+    assert tx <= x and x + width <= tx + tw and ty <= y and y + height <= ty + th
+    assert ty >= app.HORIZON_TOP
