@@ -30,7 +30,7 @@ for index, arg in enumerate(args[:-1]):
 
 COMPILED = {
     "app", "ble_read", "compositor", "graphics", "i18n", "ili9341", "screenshot", "touch",
-    "van_sprite",
+    "vans", "van_shapes",
 }
 TEXTS = ["lang_de.json", "lang_en.json", "lang_es.json", "lang_fr.json"]
 
@@ -193,8 +193,9 @@ def test_screenshot_rejects_paths(fake_mpremote):
     assert not fake_mpremote[1].exists()
 
 
-def test_van_sprite_is_up_to_date():
+
+def test_van_shapes_are_up_to_date():
     result = subprocess.run(
-        [sys.executable, str(TOOLS / "make_van.py"), "--check"], capture_output=True, text=True
+        [sys.executable, str(TOOLS / "make_vans.py"), "--check"], capture_output=True, text=True
     )
     assert result.returncode == 0, result.stderr

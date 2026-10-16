@@ -8,7 +8,8 @@ from ili9341 import ILI9341
 from graphics import Graphics, BLACK, WHITE, CYAN, YELLOW, GREEN, GREY, RED
 from ble_read import WT901BLEClient
 from touch import TouchInput
-from compositor import Bitmap, DisplayList, StripRenderer
+from compositor import DisplayList, StripRenderer
+import vans
 import i18n
 from i18n import t
 from config import (
@@ -24,13 +25,14 @@ from config import (
     LEVEL_FRAME_THRESHOLD_DEG,
     LONG_PRESS_MS,
     NO_WEDGE_NEEDED_THRESHOLD_CM,
-    PITCH_PIXELS_PER_DEGREE,
     REAR_TRACK_MM,
     SCREEN_TOP_INSET,
     RENDER_INTERVAL_MS,
     SENSOR_RECOVERY_RESET_COUNT,
     SENSOR_STALE_MS,
     SETUP_ERROR_RESET_MS,
+    VAN_TILT_GAIN,
+    VAN_TILT_MAX_DEG,
     STEP_ERROR_RESET_COUNT,
     STEP_ERROR_RETRY_MS,
     WHEELBASE_MM,
@@ -557,228 +559,39 @@ def draw_sensor_warning(state, message=None):
         page_renderer.invalidate()
 
 
-def horizon_geometry(pitch_deg, roll_deg):
-    """Return the clamped pitch and roll slope used to draw the horizon."""
-    pitch_deg = clamp(pitch_deg, -35.0, 35.0)
-    roll_deg = clamp(roll_deg, -45.0, 45.0)
-    return pitch_deg, math.tan(math.radians(roll_deg))
+# The attitude scenes: the van from behind tilts with roll, the van from
+# the right tilts with pitch, each standing on fixed, level ground.
+REAR_GROUND_Y = HORIZON_TOP + 102
+SIDE_GROUND_Y = HEIGHT - READOUT_HEIGHT - 22
+GROUND_DEPTH = 8
 
 
-def horizon_y(x, pitch_deg, roll_slope):
-    y = int(
-        HORIZON_CENTER_Y
-        + pitch_deg * PITCH_PIXELS_PER_DEGREE
-        + roll_slope * (x - HORIZON_CENTER_X)
+def van_tilt(angle_deg):
+    """Displayed tilt: exaggerated so small angles show, then clamped."""
+    return clamp(angle_deg * VAN_TILT_GAIN, -VAN_TILT_MAX_DEG, VAN_TILT_MAX_DEG)
+
+
+def draw_scene(van, tilt_deg, ground_y, level):
+    g.fill_rect(0, ground_y, WIDTH, GROUND_DEPTH, GROUND)
+    # The ground's top edge turns green while this axis is level.
+    g.fill_rect(0, ground_y, WIDTH, 1, GREEN if level else WHITE)
+    picture, x, y = vans.draw_tilted(van, tilt_deg, VAN_TILT_MAX_DEG)
+    g.bitmap(HORIZON_CENTER_X + x, ground_y + y, picture)
+
+
+def draw_attitude(pitch_deg, roll_deg):
+    g.fill_rect(0, HORIZON_TOP, WIDTH, HEIGHT - HORIZON_TOP, SKY)
+    # Positive roll lifts the left side: seen from behind, the van turns
+    # clockwise. Positive pitch lifts the front, which faces right in the
+    # side view: the van turns anticlockwise.
+    draw_scene(
+        vans.REAR, van_tilt(roll_deg), REAR_GROUND_Y,
+        abs(roll_deg) < LEVEL_FRAME_THRESHOLD_DEG,
     )
-    return clamp(y, HORIZON_TOP, HORIZON_BOTTOM)
-
-
-# Pitch arc geometry: an upper half-ring between two ellipses.
-ARC_RADIUS_X = 105
-ARC_RADIUS_Y = 90
-ARC_THICKNESS = 2
-
-
-def arc_ring_rects(cx, baseline, rx, ry, thickness):
-    """Return row runs of the half-ring between ellipses (rx, ry) and
-    (rx - thickness, ry - thickness), so its width is the same everywhere.
-
-    A pixel belongs to the ring when its centre lies between the two.
-    """
-    rects = []
-    inner_rx = rx - thickness
-    inner_ry = ry - thickness
-    for y in range(baseline - ry, baseline):
-        dy = baseline - (y + 0.5)
-        if dy >= ry:
-            continue
-        outer = rx * math.sqrt(1.0 - (dy / ry) ** 2)
-        inner = inner_rx * math.sqrt(1.0 - (dy / inner_ry) ** 2) if dy < inner_ry else 0.0
-        left = math.ceil(cx - outer - 0.5)
-        right = math.floor(cx + outer - 0.5)
-        if inner <= 0.5:
-            rects.append((left, y, right - left + 1, 1))
-            continue
-        left_end = math.floor(cx - inner - 0.5)
-        right_start = math.ceil(cx + inner - 0.5)
-        if left_end >= left:
-            rects.append((left, y, left_end - left + 1, 1))
-        if right >= right_start:
-            rects.append((right_start, y, right - right_start + 1, 1))
-    return rects
-
-
-def arc_point(cx, baseline, x):
-    """Return the outer-ellipse point above `x` and its outward unit normal."""
-    rx, ry = ARC_RADIUS_X, ARC_RADIUS_Y
-    dx = clamp(x - cx, -rx, rx)
-    dy = ry * math.sqrt(max(0.0, 1.0 - (dx / rx) ** 2))
-    nx, ny = dx / (rx * rx), -dy / (ry * ry)
-    length = math.sqrt(nx * nx + ny * ny) or 1.0
-    return cx + dx, baseline - dy, nx / length, ny / length
-
-
-def tick_rects(px, py, nx, ny, inside, outside):
-    """Rasterise a 2-pixel-wide tick along the normal (nx, ny) into row runs."""
-    pixels = set()
-    steps = int((inside + outside) * 4) + 1
-    for index in range(steps):
-        along = -inside + index / 4.0
-        for across in (-0.5, 0.5):
-            x = px + nx * along - ny * across
-            y = py + ny * along + nx * across
-            pixels.add((int(math.floor(x)), int(math.floor(y))))
-    rects = []
-    for y in sorted({y for _, y in pixels}):
-        xs = sorted(x for x, row in pixels if row == y)
-        start = previous = xs[0]
-        for x in xs[1:] + [None]:
-            if x is not None and x == previous + 1:
-                previous = x
-                continue
-            rects.append((start, y, previous - start + 1, 1))
-            if x is not None:
-                start = previous = x
-    return rects
-
-
-def draw_pitch_arc():
-    """Draw the fixed curved attitude scale above the moving horizon."""
-    cx = HORIZON_CENTER_X
-    baseline = HORIZON_CENTER_Y + 10
-    for x, y, width, height in arc_ring_rects(
-        cx, baseline, ARC_RADIUS_X, ARC_RADIUS_Y, ARC_THICKNESS
-    ):
-        g.fill_rect(x, y, width, height, WHITE)
-
-    for degree in range(-40, 41, 5):
-        px, py, nx, ny = arc_point(cx, baseline, cx + ARC_RADIUS_X * degree / 40.0)
-        major = degree % 10 == 0
-        # Ticks point at the centre, from the ring's inner edge outward.
-        for x, y, width, height in tick_rects(
-            px, py, nx, ny, ARC_THICKNESS, 5 if major else 2
-        ):
-            g.fill_rect(x, y, width, height, WHITE)
-        if major and abs(degree) < 40:
-            # Labels sit outside the ring along the same direction; the
-            # ends (±40) are left unlabelled where the arc meets the horizon.
-            label = str(degree)
-            lx = px + nx * 12
-            ly = py + ny * 12
-            g.text(int(lx - len(label) * 3 + 0.5), int(ly - 3.5 + 0.5), label, WHITE)
-
-
-def draw_ladder(pitch_deg, roll_deg):
-    pitch_offset = pitch_deg * PITCH_PIXELS_PER_DEGREE
-    roll_slope = math.tan(math.radians(roll_deg))
-
-    for mark in (20, 10, -10, -20):
-        base_y = HORIZON_CENTER_Y + pitch_offset - mark * 1.35
-        if base_y < HORIZON_TOP + 3 or base_y > HORIZON_BOTTOM - 3:
-            continue
-
-        for start_x, end_x in ((73, 103), (137, 167)):
-            run_start = None
-            run_y = None
-            for x in range(start_x, end_x, 3):
-                y = int(base_y + roll_slope * (x - HORIZON_CENTER_X))
-                if HORIZON_TOP < y < HORIZON_BOTTOM and y == run_y:
-                    continue
-                if run_start is not None:
-                    g.fill_rect(run_start, run_y, x - run_start, 2, WHITE)
-                if HORIZON_TOP < y < HORIZON_BOTTOM:
-                    run_start = x
-                    run_y = y
-                else:
-                    run_start = None
-                    run_y = None
-            if run_start is not None:
-                g.fill_rect(run_start, run_y, end_x - run_start, 2, WHITE)
-
-        label = "%+d" % mark
-        label_y = int(base_y - 3)
-        g.text(43, label_y, label, WHITE)
-        g.text(177, label_y, label, WHITE)
-
-
-def draw_van_side(center_y):
-    """Draw the side-view camper (src/van_sprite.py) above the level marker."""
-    import van_sprite
-
-    picture = Bitmap(
-        van_sprite.VAN_WIDTH,
-        van_sprite.VAN_HEIGHT,
-        list(van_sprite.VAN_COLOURS),
-        van_sprite.VAN_PIXELS,
+    draw_scene(
+        vans.SIDE, -van_tilt(pitch_deg), SIDE_GROUND_Y,
+        abs(pitch_deg) < LEVEL_FRAME_THRESHOLD_DEG,
     )
-    # The picture holds its own copy; drop the module so its packed pixels
-    # do not stay in RAM too. draw_cached() keeps the picture.
-    sys.modules.pop("van_sprite", None)
-    x0 = HORIZON_CENTER_X - picture.width // 2
-    y0 = center_y + 6 - (picture.height - 2)  # Outline bottom on center_y + 6.
-    g.bitmap(x0, y0, picture)
-
-    marker_y = int(center_y + 12)
-    for row in range(6):
-        half_width = row + 1
-        g.fill_rect(
-            HORIZON_CENTER_X - half_width,
-            marker_y + row,
-            half_width * 2 + 1,
-            1,
-            YELLOW,
-        )
-
-
-def draw_horizon(pitch_deg, roll_deg):
-    roll_deg = clamp(roll_deg, -45.0, 45.0)
-    pitch_deg, roll_slope = horizon_geometry(pitch_deg, roll_deg)
-
-    # Group adjacent strips with the same boundary height. Near level, this
-    # replaces dozens of tiny SPI windows with only a few wide rectangles.
-    run_x = 0
-    run_y = horizon_y(2, pitch_deg, roll_slope)
-    for x in range(4, WIDTH + 1, 4):
-        next_y = (
-            horizon_y(x + 2, pitch_deg, roll_slope)
-            if x < WIDTH
-            else None
-        )
-        if next_y == run_y:
-            continue
-
-        run_width = x - run_x
-        g.fill_rect(run_x, HORIZON_TOP, run_width, run_y - HORIZON_TOP, SKY)
-        g.fill_rect(
-            run_x,
-            run_y,
-            run_width,
-            HORIZON_BOTTOM - run_y + 1,
-            GROUND,
-        )
-        if next_y is not None:
-            run_x = x
-            run_y = next_y
-
-    # Merge adjacent horizontal horizon segments that share the same row.
-    run_x = 0
-    run_y = horizon_y(2, pitch_deg, roll_slope)
-    for x in range(4, WIDTH + 1, 4):
-        next_y = (
-            horizon_y(x + 2, pitch_deg, roll_slope)
-            if x < WIDTH
-            else None
-        )
-        if next_y == run_y:
-            continue
-        g.fill_rect(run_x, run_y, x - run_x, 1, WHITE)
-        if next_y is not None:
-            run_x = x
-            run_y = next_y
-
-    draw_cached("arc", draw_pitch_arc, bitmap=True)
-    draw_ladder(pitch_deg, roll_deg)
-    draw_cached("van", draw_van_side, HORIZON_CENTER_Y)
 
 
 def record_items(draw, *args):
@@ -803,57 +616,11 @@ def compositing():
 layer_cache = {}
 
 
-# Tile size for bitmap layers: thin shapes like the arc leave most tiles
-# empty, and a small blit area keeps compositing fast.
-LAYER_TILE_WIDTH = 24
-LAYER_TILE_HEIGHT = 12
-
-
-def layer_bitmaps(items):
-    """Turn a layer's rects into Bitmap items, one per non-empty tile.
-
-    Each tile is trimmed to its content, so a thin arc needs only a few
-    thousand pixels of blitting instead of its whole bounding box.
-    """
-    tiles = {}
-    for x, y, w, h, colour in items:
-        for tile_y in range(y // LAYER_TILE_HEIGHT, (y + h - 1) // LAYER_TILE_HEIGHT + 1):
-            top = max(y, tile_y * LAYER_TILE_HEIGHT)
-            bottom = min(y + h, (tile_y + 1) * LAYER_TILE_HEIGHT)
-            for tile_x in range(x // LAYER_TILE_WIDTH, (x + w - 1) // LAYER_TILE_WIDTH + 1):
-                left = max(x, tile_x * LAYER_TILE_WIDTH)
-                right = min(x + w, (tile_x + 1) * LAYER_TILE_WIDTH)
-                tiles.setdefault((tile_y, tile_x), []).append(
-                    (left, top, right - left, bottom - top, colour)
-                )
-    result = []
-    for key in sorted(tiles):
-        rects = tiles[key]
-        left = min(rect[0] for rect in rects)
-        top = min(rect[1] for rect in rects)
-        right = max(rect[0] + rect[2] for rect in rects)
-        bottom = max(rect[1] + rect[3] for rect in rects)
-        colours = [None]
-        for rect in rects:
-            if rect[4] not in colours:
-                colours.append(rect[4])
-        picture = Bitmap(right - left, bottom - top, colours)
-        for x, y, w, h, colour in rects:
-            picture.fill_rect(x - left, y - top, w, h, colour)
-        result.append((left, top, picture.width, picture.height, picture))
-    return result
-
-
-def draw_cached(key, draw, *args, bitmap=False):
-    """Draw a fixed layer, recording it only the first time.
-
-    With bitmap=True the layer is kept as one Bitmap, which the compositor
-    copies in with a single blit per strip instead of hundreds of rects.
-    """
+def draw_cached(key, draw, *args):
+    """Draw a fixed layer, recording its rects only the first time."""
     items = layer_cache.get(key)
     if items is None:
-        items = record_items(draw, *args)
-        items = layer_cache[key] = tuple(layer_bitmaps(items) if bitmap else items)
+        items = layer_cache[key] = tuple(record_items(draw, *args))
 
     if isinstance(g.lcd, DisplayList):
         g.lcd.items.extend(items)
@@ -863,7 +630,7 @@ def draw_cached(key, draw, *args, bitmap=False):
 
 
 def draw_horizon_layers(pitch, roll, display_values, level):
-    draw_horizon(pitch, roll)
+    draw_attitude(pitch, roll)
     draw_cached("calibrate", draw_calibrate_button)
     draw_cached("language", draw_language_button)
     draw_hold_progress()

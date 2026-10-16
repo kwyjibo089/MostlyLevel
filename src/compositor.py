@@ -27,8 +27,10 @@ class Bitmap:
     at that position, instead of many small rects.
     """
 
-    def __init__(self, width, height, colours, pixels=None):
-        """`pixels`, if given, are packed MONO_HLSB or GS4_HMSB rows."""
+    def __init__(self, width, height, colours, pixels=None, buffer=None):
+        """`pixels`, if given, are packed MONO_HLSB or GS4_HMSB rows to copy.
+        `buffer`, if given, is used as it is (it may be larger), so pictures
+        redrawn every frame need no new allocation."""
         if len(colours) > 16:
             raise ValueError("a Bitmap holds at most 15 colours")
         self.width = width
@@ -40,7 +42,12 @@ class Bitmap:
         else:
             fmt = framebuf.GS4_HMSB
             size = (width + 1) // 2 * height
-        data = bytearray(size) if pixels is None else bytearray(pixels)
+        if buffer is not None:
+            data = buffer
+        elif pixels is not None:
+            data = bytearray(pixels)
+        else:
+            data = bytearray(size)
         self.framebuffer = framebuf.FrameBuffer(data, width, height, fmt)
         self.rect_cache = None
         # The shared palettes, looked up on first use (per byte order).

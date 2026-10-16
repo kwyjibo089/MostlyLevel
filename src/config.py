@@ -57,7 +57,11 @@ REAR_TRACK_MM = 1790.0
 NO_WEDGE_NEEDED_THRESHOLD_CM = 0.5
 
 # Display update tuning.
-PITCH_PIXELS_PER_DEGREE = 1.8
+# HORIZON vans: their tilt is the measured angle times VAN_TILT_GAIN, so a
+# 1-2 degree slope is visible, clamped to VAN_TILT_MAX_DEG. Display only; the
+# readouts show the true angles. Untested values.
+VAN_TILT_GAIN = 3.0
+VAN_TILT_MAX_DEG = 20.0
 # Rows at the top of the LCD hidden by the printed case. Header, navigation,
 # and the top of each page move down by this amount; bottom and side
 # positions stay fixed. Owner-observed from a photo (~9 rows hidden).

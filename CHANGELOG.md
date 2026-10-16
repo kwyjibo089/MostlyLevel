@@ -4,6 +4,13 @@ Notable project changes are recorded here. This file was introduced with the ini
 
 ## Unreleased
 
+- HORIZON now shows the van itself tilting, instead of a moving horizon (owner choice):
+  - the van seen from behind tilts with roll (left side up turns it clockwise);
+  - the van seen from the right tilts with pitch (front up lifts its nose);
+  - each pivots on its lower wheel over fixed level ground, whose edge turns green while that axis is level;
+  - the tilt is drawn three times the real angle so small slopes are visible (`VAN_TILT_GAIN`, `VAN_TILT_MAX_DEG` in `config.py`); the readouts show the true angles.
+
+  The pitch arc, ladder, and moving horizon are removed, along with `PITCH_PIXELS_PER_DEGREE`, `tools/make_van.py`, and `src/van_sprite.py`. The Ducato-style shapes now come from `tools/make_vans.py` → `src/van_shapes.py` and are rotated and filled on the board by `src/vans.py`. On the board this is faster and uses less memory than before (6-minute stress run: ~75.7 KB free, slowest step ~143 ms). Reference images regenerated and reviewed; device screenshot checked.
 - The HORIZON van no longer has a rear side window; like most Ducato campers it only has the tinted window in the sliding door (owner remark).
 - The HORIZON camper now looks like a Fiat Ducato panel-van campervan (owner request): high roof curving into a raked windscreen, very short bonnet, big swept headlight, black bumper, wheel-arch trims and side strip, sliding door with rail, dark-tinted camper windows, and upright rear lights. Proportions follow an L3H2 (~5.4 m long, 3.45 m wheelbase); no logo. Same cost on the board as before (it is one 4-bit picture). Reference images regenerated and reviewed.
 - Nicer HORIZON graphics:
