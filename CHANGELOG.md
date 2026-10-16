@@ -4,6 +4,7 @@ Notable project changes are recorded here. This file was introduced with the ini
 
 ## Unreleased
 
+- HORIZON view: roll now follows the aircraft attitude-indicator convention (owner choice). With the left side high, the horizon and ladder rise on the right, as seen from the driver's seat; before, they tilted the other way. Pitch, the VAN view, and the readouts are unchanged.
 - The green level frame now surrounds the whole screen (header and menu included) and shows on every page and sub-page, LEVELLING too; it is 4 px wide so it does not cover the menu buttons. More space on ATTITUDE: CALIBRATE and the language button sit further below the VAN/HORIZON tabs, the rear van on VAN moved down, and the HORIZON view moved down into the ground area so the arc is no longer covered by CALIBRATE (owner request). Reference images regenerated and reviewed.
 - The first page is now **ATTITUDE**, with two sub-pages chosen by tabs at its top, like LEVELLING (owner request):
   - **VAN** (default): the tilting rear and side views of the van;
