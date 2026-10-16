@@ -1,3 +1,6 @@
+# Initialisation values in _init_display() come from Adafruit's ILI9341
+# library (BSD license, Limor Fried / Adafruit Industries); see
+# THIRD_PARTY_NOTICES.md.
 from machine import Pin, SPI
 import time
 from config import (

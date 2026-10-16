@@ -7,6 +7,8 @@ CYAN = 0x07FF
 YELLOW = 0xFFE0
 GREY = 0x8410
 
+# 5x7 font, likely derived from Adafruit GFX glcdfont.c (BSD license,
+# Copyright (c) 2012 Adafruit Industries); see THIRD_PARTY_NOTICES.md.
 FONT = {
     ' ': (0, 0, 0, 0, 0),
     '-': (8, 8, 8, 8, 8),
