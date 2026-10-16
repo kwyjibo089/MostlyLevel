@@ -110,11 +110,13 @@ panel = Panel()
 pins = {}
 touch = TouchController()
 ble = None
+resets = 0
 
 
 def reset():
-    global ble
+    global ble, resets
     panel.reset()
     pins.clear()
     touch.__init__()
     ble = None
+    resets = 0

@@ -3,6 +3,15 @@
 import fakehw
 
 
+class BoardReset(BaseException):
+    """Raised by reset(); a real board would restart here."""
+
+
+def reset():
+    fakehw.resets += 1
+    raise BoardReset
+
+
 class Pin:
     IN = 0
     OUT = 1

@@ -2,7 +2,7 @@
 
 ## Active application
 
-The active code is MicroPython in `src/`. MicroPython runs `main.py` at startup; it only imports `app.py` and calls `app.run()`, which runs `setup()` once and then `step()` every 30 ms. Tests drive `setup()` and `step()` directly. `app.py` imports `ILI9341` from `ili9341.py` and `Graphics` plus RGB565 colors from `graphics.py`.
+The active code is MicroPython in `src/`. MicroPython runs `main.py` at startup; it only imports `app.py` and calls `app.run()`, which runs `setup()` once and then `step()` every 30 ms. Errors in `step()` are logged and retried after 1 s with a full redraw; 5 in a row, or a failed `setup()`, hard-reset the board. Tests drive `setup()` and `step()` directly. `app.py` imports `ILI9341` from `ili9341.py` and `Graphics` plus RGB565 colors from `graphics.py`.
 
 ### Display path
 

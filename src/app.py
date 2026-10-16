@@ -26,11 +26,16 @@ from config import (
     SCREEN_TOP_INSET,
     RENDER_INTERVAL_MS,
     SENSOR_STALE_MS,
+    SETUP_ERROR_RESET_MS,
+    STEP_ERROR_RESET_COUNT,
+    STEP_ERROR_RETRY_MS,
     WHEELBASE_MM,
 )
 
 import gc
+import machine
 import math
+import sys
 import time
 
 
@@ -1021,8 +1026,41 @@ def step():
             touch = None
 
 
+def report_error(where, exc):
+    print("%s failed: %r" % (where, exc))
+    if hasattr(sys, "print_exception"):
+        sys.print_exception(exc)
+
+
 def run():
-    setup()
+    """Run the dashboard; recover from errors instead of freezing the screen.
+
+    An unexpected error would otherwise end the program and leave the last
+    image on screen, possibly a green level frame with no stale-data warning.
+    Ctrl+C (KeyboardInterrupt) is not an Exception and still stops the loop.
+    """
+    global screen_initialized
+
+    try:
+        setup()
+    except Exception as exc:
+        report_error("Setup", exc)
+        print("Restarting in %d s." % (SETUP_ERROR_RESET_MS // 1000))
+        time.sleep_ms(SETUP_ERROR_RESET_MS)
+        machine.reset()
+
+    failures = 0
     while True:
-        step()
+        try:
+            step()
+            failures = 0
+        except Exception as exc:
+            failures += 1
+            report_error("Main loop step", exc)
+            if failures >= STEP_ERROR_RESET_COUNT:
+                print("%d errors in a row; restarting the board." % failures)
+                machine.reset()
+            # The failed step may have stopped mid-draw: redraw everything.
+            screen_initialized = False
+            time.sleep_ms(STEP_ERROR_RETRY_MS)
         time.sleep_ms(30)
