@@ -22,6 +22,7 @@ from config import (
     HORIZON_STRIP_ROWS,
     LEVEL_FRAME_RELEASE_THRESHOLD_DEG,
     LEVEL_FRAME_THRESHOLD_DEG,
+    LONG_PRESS_MS,
     NO_WEDGE_NEEDED_THRESHOLD_CM,
     PITCH_PIXELS_PER_DEGREE,
     REAR_TRACK_MM,
@@ -250,6 +251,32 @@ def draw_rounded_button(rect, colour, label):
         button_x + (button_width - len(label) * 6) // 2,
         button_y + 5,
         label,
+        BLACK,
+    )
+
+
+# Button being held for a long press: "calibrate", "language", or None.
+hold_target = None
+hold_start_ms = 0
+hold_progress = 0  # Progress bar eighths shown on the held button.
+HOLD_STEPS = 8
+
+
+def hold_rect():
+    return CALIBRATE_RECT if hold_target == "calibrate" else LANGUAGE_RECT
+
+
+def draw_hold_progress():
+    """Draw the held button's progress bar along its bottom edge."""
+    if hold_target is None or hold_progress == 0:
+        return
+    x, y, width, height = hold_rect()
+    inner = width - CALIBRATE_RADIUS * 2
+    g.fill_rect(
+        x + CALIBRATE_RADIUS,
+        y + height - 4,
+        inner * hold_progress // HOLD_STEPS,
+        2,
         BLACK,
     )
 
@@ -753,6 +780,7 @@ def draw_horizon_layers(pitch, roll, display_values, level):
     draw_horizon(pitch, roll)
     draw_cached("calibrate", draw_calibrate_button)
     draw_cached("language", draw_language_button)
+    draw_hold_progress()
     draw_readouts(display_values)
     if level:
         draw_cached("level", draw_level_frame)
@@ -763,12 +791,32 @@ def horizon_page_items(pitch, roll, display_values, level):
     return record_items(draw_horizon_layers, pitch, roll, display_values, level)
 
 
+# Arguments of the last HORIZON page drawn, to repaint a held button.
+last_horizon_args = None
+
+
+def draw_held_button():
+    """Repaint only the held button (with its progress) in one transfer."""
+    if active_screen != 0 or last_horizon_args is None:
+        return
+    x, y, width, height = hold_rect()
+    items = horizon_page_items(*last_horizon_args)
+    if compositing():
+        page_renderer.render_area(x, y, width, height, items)
+    else:
+        draw_cached("calibrate", draw_calibrate_button)
+        draw_cached("language", draw_language_button)
+        draw_hold_progress()
+
+
 def draw_horizon_page(pitch, roll, display_values, level, force=False):
     """Draw the HORIZON page, compositing off-screen when possible.
 
     Every pixel is sent once with its final colour, so moving graphics no
     longer erase and repaint the elements drawn over them.
     """
+    global last_horizon_args
+    last_horizon_args = (pitch, roll, display_values, level)
     items = horizon_page_items(pitch, roll, display_values, level)
     if not compositing():
         # Fallback, and screenshots: draw the same rects directly.
@@ -1080,21 +1128,13 @@ def step():
     if touch is not None:
         try:
             touch_point = touch.read()
-            if touch_point is not None and not touch_was_down:
+            if hold_target is not None:
+                update_hold(touch_point, now, state)
+            elif touch_point is not None and not touch_was_down:
                 selected_screen = touch_screen_at(touch_point)
-                if touch_language_at(touch_point):
-                    switch_language(sensor.latest, state)
-                elif touch_calibrate_at(touch_point):
-                    if state == "LIVE" and set_level_reference(sensor.latest):
-                        display_values, pitch, roll = vehicle_values(sensor.latest)
-                        level_frame_active = is_level(pitch, roll)
-                        draw_dashboard(sensor.latest, state)
-                        attitude = (pitch, roll)
-                        last_attitude = attitude
-                        last_level = level_frame_active
-                        last_render_ms = time.ticks_ms()
-                    else:
-                        draw_sensor_warning(state, t("warning_calibrate_needs_sensor"))
+                held = held_button_at(touch_point)
+                if held is not None:
+                    start_hold(held, now)
                 elif selected_screen is not None and selected_screen != active_screen:
                     active_screen = selected_screen
                     draw_dashboard(sensor.latest, state)
@@ -1107,6 +1147,68 @@ def step():
         except Exception as exc:
             print("Touch read failed:", exc)
             touch = None
+
+
+def calibrate_now(state):
+    """Save the live attitude as level, or explain why that is not possible."""
+    global level_frame_active, last_attitude, last_level, last_render_ms
+    if state == "LIVE" and set_level_reference(sensor.latest):
+        display_values, pitch, roll = vehicle_values(sensor.latest)
+        level_frame_active = is_level(pitch, roll)
+        draw_dashboard(sensor.latest, state)
+        last_attitude = (pitch, roll)
+        last_level = level_frame_active
+        last_render_ms = time.ticks_ms()
+    else:
+        draw_sensor_warning(state, t("warning_calibrate_needs_sensor"))
+
+
+def held_button_at(point):
+    if touch_language_at(point):
+        return "language"
+    if touch_calibrate_at(point):
+        return "calibrate"
+    return None
+
+
+def start_hold(target, now):
+    global hold_target, hold_start_ms, hold_progress
+    hold_target = target
+    hold_start_ms = now
+    hold_progress = 0
+
+
+def update_hold(point, now, state):
+    """Track a long press on CALIBRATE or the language button.
+
+    The button acts once it has been held for LONG_PRESS_MS; releasing it
+    or sliding off earlier cancels. A bar along the button shows progress.
+    """
+    global hold_target, hold_start_ms, hold_progress
+    if point is None or held_button_at(point) != hold_target:
+        hold_target_was = hold_target
+        hold_progress = 0
+        if hold_target_was is not None:
+            draw_held_button()
+        hold_target = None
+        return
+
+    held_ms = time.ticks_diff(now, hold_start_ms)
+    if held_ms >= LONG_PRESS_MS:
+        target = hold_target
+        hold_progress = 0
+        draw_held_button()  # Clear the bar; not every action redraws.
+        hold_target = None
+        if target == "language":
+            switch_language(sensor.latest, state)
+        else:
+            calibrate_now(state)
+        return
+
+    progress = held_ms * HOLD_STEPS // LONG_PRESS_MS
+    if progress != hold_progress:
+        hold_progress = progress
+        draw_held_button()
 
 
 def report_error(where, exc):

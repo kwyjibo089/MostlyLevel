@@ -41,6 +41,10 @@ DISPLAY_PITCH_SIGN = 1.0
 DISPLAY_ROLL_SENSOR_KEY = "pitch"
 DISPLAY_ROLL_SIGN = 1.0
 
+# CALIBRATE and the language button act only after being held this long,
+# so a stray touch cannot overwrite the level reference. Untested value.
+LONG_PRESS_MS = 1000
+
 # Screen languages, in the order the HORIZON language button cycles; each
 # needs a lang_<code>.json file. The chosen one is saved in /language.cfg.
 LANGUAGES = ("en", "de", "fr", "es")

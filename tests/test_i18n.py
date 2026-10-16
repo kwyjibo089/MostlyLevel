@@ -117,14 +117,16 @@ def test_numbers_use_the_language_decimal_separator(app):
     assert app.cm_text(3.45) == "3.5 cm"
 
 
-def test_tapping_the_chip_switches_language(app_with_touch, fake_clock, touch, panel):
-    from test_app_flow import go_live, tap
+def test_holding_the_language_button_switches_language(app_with_touch, fake_clock, touch, panel):
+    from test_app_flow import go_live, hold, tap
     from test_rendering import full_direct_redraw, snapshot
 
     app = app_with_touch
     go_live(app, fake_clock)
     x, y, width, height = app.LANGUAGE_RECT
     tap(app, fake_clock, touch, (x + width // 2, y + height // 2))
+    assert app.i18n.language == "en"  # A tap is not enough.
+    hold(app, fake_clock, touch, (x + width // 2, y + height // 2))
     assert app.i18n.language == "de"
     # Cached layers were dropped: the page matches a fresh German redraw.
     assert snapshot(panel) == full_direct_redraw(app, panel, app.sensor.latest)

@@ -42,6 +42,21 @@ def tap(app, clock, touch, point):
     step(app, clock)
 
 
+def hold(app, clock, touch, point, ms=None):
+    """Press `point`, keep it down for `ms` (default: the long press), release."""
+    from config import LONG_PRESS_MS
+
+    touch.point = point
+    held = 0
+    # Slightly longer than the long press, so it completes before release.
+    target = LONG_PRESS_MS + 2 * STEP_MS if ms is None else ms
+    while held <= target:
+        step(app, clock)
+        held += STEP_MS
+    touch.point = None
+    step(app, clock)
+
+
 def centre(rect):
     x, y, width, height = rect
     return x + width // 2, y + height // 2
@@ -119,7 +134,7 @@ def test_calibrate_by_touch_saves_reference(
     sensor_pitch = app.sensor.latest["roll"]
     sensor_roll = app.sensor.latest["pitch"]
 
-    tap(app, fake_clock, touch, centre(app.CALIBRATE_RECT))
+    hold(app, fake_clock, touch, centre(app.CALIBRATE_RECT))
     assert reference_file.read_text() == "%.5f\n%.5f\n" % (sensor_pitch, sensor_roll)
     assert app.last_attitude == (0.0, 0.0)
     assert app.level_frame_active
@@ -136,7 +151,7 @@ def test_calibrate_needs_live_sensor(
 ):
     app = app_with_touch
     step(app, fake_clock)
-    tap(app, fake_clock, touch, centre(app.CALIBRATE_RECT))
+    hold(app, fake_clock, touch, centre(app.CALIBRATE_RECT))
     assert not reference_file.exists()
     assert_matches_golden(request, "flow_calibrate_refused", panel.pixels)
 
@@ -327,3 +342,60 @@ def test_recovery_shows_disconnected(app, fake_clock):
     step(app, fake_clock)
     assert app.sensor.state == "DISCONNECTING"
     assert app.last_state == "DISCONNECTED"
+
+
+def test_a_tap_on_calibrate_does_nothing(app_with_touch, fake_clock, touch, panel, reference_file):
+    app = app_with_touch
+    go_live(app, fake_clock)
+    before = panel.pixels[:]
+    tap(app, fake_clock, touch, centre(app.CALIBRATE_RECT))
+    assert not reference_file.exists()
+    assert panel.pixels == before
+
+
+def test_releasing_early_cancels_and_restores_the_button(
+    app_with_touch, fake_clock, touch, panel, reference_file
+):
+    from config import LONG_PRESS_MS
+    from graphics import BLACK
+
+    app = app_with_touch
+    go_live(app, fake_clock)
+    before = panel.pixels[:]
+    x, y, width, height = app.CALIBRATE_RECT
+    touch.point = centre(app.CALIBRATE_RECT)
+    for _ in range(LONG_PRESS_MS // 2 // STEP_MS):
+        step(app, fake_clock)
+    bar_y = y + height - 4
+    bar = [panel.pixel(px, bar_y) for px in range(x + 6, x + 20)]
+    assert bar == [BLACK] * len(bar)  # The progress bar is growing.
+    assert app.hold_target == "calibrate"
+
+    touch.point = None
+    step(app, fake_clock)
+    assert app.hold_target is None
+    assert not reference_file.exists()
+    assert panel.pixels == before
+
+
+def test_sliding_off_cancels(app_with_touch, fake_clock, touch, reference_file):
+    from config import LONG_PRESS_MS
+
+    app = app_with_touch
+    go_live(app, fake_clock)
+    touch.point = centre(app.CALIBRATE_RECT)
+    step(app, fake_clock)
+    touch.point = (120, 200)  # Off the button, finger still down.
+    for _ in range(2 * LONG_PRESS_MS // STEP_MS):
+        step(app, fake_clock)
+    assert not reference_file.exists()
+    assert app.hold_target is None
+
+
+def test_a_long_hold_acts_once(app_with_touch, fake_clock, touch):
+    from config import LONG_PRESS_MS
+
+    app = app_with_touch
+    go_live(app, fake_clock)
+    hold(app, fake_clock, touch, centre(app.LANGUAGE_RECT), 3 * LONG_PRESS_MS)
+    assert app.i18n.language == "de"
