@@ -4,6 +4,7 @@ Notable project changes are recorded here. This file was introduced with the ini
 
 ## Unreleased
 
+- Documentation only: the owner reported the composited LEVELLING page as a lot better on the device (2026-10-16).
 - LEVELLING page drawn flicker-free like HORIZON: a changed value is composited off-screen (only that value line) and sent in one transfer; page, tab, and layout changes composite the whole page through the strip renderer, which is now shared by both pages (`page_renderer`). Page and tab switches no longer clear the screen to black first. On the board this is also faster than before (value update ~130–150 ms instead of ~200–220 ms; switching pages ~0.4 s quicker). Pixel output is unchanged in the desktop tests; not yet observed on the device.
 - Documentation and a `config.py` comment only: recorded the owner's 2026-10-16 device checks. The image is clean at 40 MHz SPI, updates show almost no flicker or lag, and switching the sensor off shows the disconnect warning, with a return to LIVE once it is back on.
 - Documentation only: recorded an on-board comparison of `.mpy` and source modules. Importing the app takes ~190 ms instead of ~720 ms, temporary allocation during import is ~5 KB lower, and steady-state free memory is about the same (~91.9 KB versus ~90.7 KB). Corrected the README and `build_mpy.sh` rationale accordingly.
