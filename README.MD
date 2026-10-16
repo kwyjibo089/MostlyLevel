@@ -4,13 +4,13 @@ MostlyLevel is a campervan levelling system prototype. The MicroPython app shows
 
 ## Screenshots
 
-### HORIZON
+### ATTITUDE
 
-![HORIZON screen with the virtual horizon and pitch and roll readouts](assets/screenshot1.png)
+![ATTITUDE screen, HORIZON view, with the virtual horizon and pitch and roll readouts](assets/screenshot1.png)
 
-The main screen shows the van from behind (tilting with roll) and from the right (tilting with pitch), the pitch and roll readouts, and sensor connection and battery status. Each van pivots on its lower wheel, and the edge of its ground turns green while that axis is level. The tilt is drawn three times the measured angle (`VAN_TILT_GAIN`, up to `VAN_TILT_MAX_DEG`) so small slopes are visible; the readouts show the true angles. (The screenshots above show the earlier moving-horizon design.)
+The main screen, **ATTITUDE**, has two views, chosen with the tabs at its top. **VAN** (the default) shows the van from behind, tilting with roll, and from the right, tilting with pitch; each pivots on its lower wheel, and the edge of its ground turns green while that axis is level. The tilt is drawn three times the measured angle (`VAN_TILT_GAIN`, up to `VAN_TILT_MAX_DEG`) so small slopes are visible. **HORIZON** is the virtual horizon: moving sky and ground, pitch ladder, and curved scale, with the van seen from behind as the fixed symbol. Both show the true pitch and roll readouts and the sensor connection and battery status. (The screenshots show an earlier version of the HORIZON view, with a side-view van and the buttons one row higher.)
 
-![HORIZON screen with a green frame when the camper is level](assets/screenshot.png)
+![ATTITUDE screen, HORIZON view, with a green frame when the camper is level](assets/screenshot.png)
 
 The green frame appears when both pitch and roll are within ±0.5°.
 
@@ -28,9 +28,9 @@ This view ranks the two corners with the largest estimated lift amounts for a tw
 
 ## Current status
 
-- `src/app.py` provides two touch-selectable pages: **HORIZON** for the tilting-van attitude view and **LEVELLING** for the corner lift estimates. The levelling page has **2 WEDGES** and **4 CORNERS** views; the two-wedge view is selected by default. The top bar shows the latest sensor battery percentage beside the BLE status.
+- `src/app.py` provides two touch-selectable pages: **ATTITUDE** (sub-pages **VAN** and **HORIZON**) and **LEVELLING** for the corner lift estimates. The levelling page has **2 WEDGES** and **4 CORNERS** views; the two-wedge view is selected by default. The top bar shows the latest sensor battery percentage beside the BLE status.
 - The display uses decoded pitch and roll from the WT901 BLE client and redraws the readouts and vans when either changes by at least 0.2°. The status header redraws at startup or when connection or battery status changes. Yaw is not displayed.
-- On the HORIZON page, a green frame turns on when live pitch and roll are both within ±0.5° and stays on until either exceeds ±0.7°. These thresholds are configurable in `src/config.py`; the behavior has not yet been verified on hardware.
+- On the ATTITUDE page, a green frame turns on when live pitch and roll are both within ±0.5° and stays on until either exceeds ±0.7°. These thresholds are configurable in `src/config.py`; the behavior has not yet been verified on hardware.
 - If the sensor is stale or disconnected, the app displays a prominent warning and red frame instead of leaving a green level indication.
 - Dashboard operation and BLE connection/notification behavior remain unverified. An initial LCD memory-read screenshot attempt returned all-zero pixels; the replacement software-rendered screenshot path has not yet been tested on hardware. Protocol assumptions, physical board variant, and installed firmware also remain unverified.
 
@@ -38,13 +38,13 @@ The **2 WEDGES** view ranks wheel corners by estimated lift and shows the two la
 
 ### Language
 
-On the **HORIZON** screen, press and hold (about 1 s) the cyan language button at the upper left, on the same line as **CALIBRATE** (it shows **EN**, **DE**, **FR**, or **ES**), to switch to the next language; the screen redraws at once and the choice is saved in `/language.cfg` on the ESP32, so it survives restarts. Numbers use a decimal comma in French and Spanish and a decimal point in English and German (the owner's Swiss convention); the separator is the `decimal` entry in each language file.
+On the **ATTITUDE** screen (either view), press and hold (about 1 s) the cyan language button at the left, below the VAN/HORIZON tabs and on the same line as **CALIBRATE** (it shows **EN**, **DE**, **FR**, or **ES**), to switch to the next language; the screen redraws at once and the choice is saved in `/language.cfg` on the ESP32, so it survives restarts. Numbers use a decimal comma in French and Spanish and a decimal point in English and German (the owner's Swiss convention); the separator is the `decimal` entry in each language file.
 
 The screen texts live in `src/lang_en.json`, `src/lang_de.json`, `src/lang_fr.json`, and `src/lang_es.json`, one key per text, written in uppercase (MicroPython only upper-cases ASCII letters). To change a text, edit the JSON file and deploy. To add a language, copy `lang_en.json` to `lang_<code>.json`, translate it, and add the code to `LANGUAGES` in `src/config.py`. The tests check that every file has every key, that every text fits its space on screen, and that the font has every character; a missing accented letter can be added to `ACCENTED` in `src/graphics.py`. The German, French, and Spanish texts were drafted by Claude and have not been reviewed by native speakers.
 
 ### Set the level reference
 
-On the **HORIZON** screen, after leveling the van with a trusted reference, press and hold the rounded yellow **CALIBRATE** button in the upper-right corner above the arc for about one second, until the bar along the button fills. A short tap does nothing, so a stray touch cannot overwrite the reference. The app records the current pitch and roll as zero offsets in `/level_reference.cfg` on the ESP32 and uses them after restart. Hold **CALIBRATE** again to replace the reference after changing the sensor mount. The button requires live sensor data. Confirm the result on the physical display before relying on it; this calibration flow has not yet been hardware-verified.
+On the **ATTITUDE** screen (either view), after leveling the van with a trusted reference, press and hold the rounded yellow **CALIBRATE** button in the upper-right corner above the arc for about one second, until the bar along the button fills. A short tap does nothing, so a stray touch cannot overwrite the reference. The app records the current pitch and roll as zero offsets in `/level_reference.cfg` on the ESP32 and uses them after restart. Hold **CALIBRATE** again to replace the reference after changing the sensor mount. The button requires live sensor data. Confirm the result on the physical display before relying on it; this calibration flow has not yet been hardware-verified.
 
 ## Repository layout
 
@@ -53,7 +53,7 @@ On the **HORIZON** screen, after leveling the van with a trusted reference, pres
 - `src/ili9341.py` — direct SPI display driver.
 - `src/graphics.py` — drawing helpers and bitmap font, including accented capitals.
 - `src/i18n.py` — loads the screen texts of the selected language.
-- `src/vans.py` — draws the HORIZON vans tilted; `src/van_shapes.py` holds their shapes, generated by `tools/make_vans.py` (edit the shapes there and rerun it).
+- `src/vans.py` — draws the vans: tilted on the VAN view and as the fixed symbol on the HORIZON view; `src/van_shapes.py` holds their shapes, generated by `tools/make_vans.py` (edit the shapes there and rerun it).
 - `src/lang_*.json` — screen texts per language (English, German, French, Spanish).
 - `src/compositor.py` — off-screen strip compositing used for flicker-free page redraws.
 - `src/screenshot.py` — temporary framebuffer adapter and BMP writer used for screenshots.

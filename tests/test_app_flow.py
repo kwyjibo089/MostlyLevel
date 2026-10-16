@@ -399,3 +399,18 @@ def test_a_long_hold_acts_once(app_with_touch, fake_clock, touch):
     go_live(app, fake_clock)
     hold(app, fake_clock, touch, centre(app.LANGUAGE_RECT), 3 * LONG_PRESS_MS)
     assert app.i18n.language == "de"
+
+
+def test_attitude_sub_pages(app_with_touch, fake_clock, touch, panel):
+    app = app_with_touch
+    go_live(app, fake_clock)
+    assert app.active_screen == 0 and app.attitude_view == 0  # VAN first.
+    tabs_y = app.CORNER_TABS_Y + app.NAV_HEIGHT // 2
+    tap(app, fake_clock, touch, (180, tabs_y))
+    assert app.attitude_view == 1  # HORIZON.
+    # The LEVELLING tabs keep their own choice.
+    nav_y = app.NAV_Y + app.NAV_HEIGHT // 2
+    tap(app, fake_clock, touch, (180, nav_y))
+    assert app.corner_view == 0
+    tap(app, fake_clock, touch, (60, nav_y))
+    assert app.active_screen == 0 and app.attitude_view == 1

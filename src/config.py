@@ -57,7 +57,9 @@ REAR_TRACK_MM = 1790.0
 NO_WEDGE_NEEDED_THRESHOLD_CM = 0.5
 
 # Display update tuning.
-# HORIZON vans: their tilt is the measured angle times VAN_TILT_GAIN, so a
+# HORIZON view: pixels the horizon moves per degree of pitch.
+PITCH_PIXELS_PER_DEGREE = 1.8
+# VAN view: the vans' tilt is the measured angle times VAN_TILT_GAIN, so a
 # 1-2 degree slope is visible, clamped to VAN_TILT_MAX_DEG. Display only; the
 # readouts show the true angles. Untested values.
 VAN_TILT_GAIN = 3.0

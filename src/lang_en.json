@@ -9,7 +9,6 @@
   "status_wait": "WAIT",
   "status_error": "ERROR",
   "status_idle": "IDLE",
-  "nav_horizon": "HORIZON",
   "nav_levelling": "LEVELLING",
   "calibrate": "CALIBRATE",
   "tab_wedges": "2 WEDGES",
@@ -25,5 +24,8 @@
   "warning_waiting": "WAITING FOR SENSOR",
   "warning_calibrate_needs_sensor": "ZERO NEEDS LIVE SENSOR",
   "pitch_short": "P",
-  "roll_short": "R"
+  "roll_short": "R",
+  "nav_attitude": "ATTITUDE",
+  "tab_van": "VAN",
+  "tab_horizon": "HORIZON"
 }

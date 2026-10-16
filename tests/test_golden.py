@@ -14,13 +14,19 @@ def sensor_values(pitch, roll):
     return {"roll": pitch, "pitch": roll, "yaw": 0.0}
 
 
-# name: (page, corner view, displayed pitch/roll or None, state, level frame)
+# name: (page, sub-page, displayed pitch/roll or None, state, level frame).
+# Page 0 is ATTITUDE (sub-pages VAN, HORIZON); page 1 is LEVELLING
+# (sub-pages 2 WEDGES, 4 CORNERS).
 SCENES = {
-    "horizon_live": (0, 0, (3.7, -0.2), "LIVE", False),
-    "horizon_level": (0, 0, (0.2, -0.1), "LIVE", True),
-    "horizon_tilted": (0, 0, (-12.0, 18.0), "LIVE", False),
-    "horizon_waiting": (0, 0, None, "SCANNING", False),
-    "horizon_stale": (0, 0, (1.0, 1.0), "NO DATA", False),
+    "van_live": (0, 0, (3.7, -0.2), "LIVE", False),
+    "van_level": (0, 0, (0.2, -0.1), "LIVE", True),
+    "van_tilted": (0, 0, (-12.0, 18.0), "LIVE", False),
+    "van_waiting": (0, 0, None, "SCANNING", False),
+    "van_stale": (0, 0, (1.0, 1.0), "NO DATA", False),
+    "horizon_live": (0, 1, (3.7, -0.2), "LIVE", False),
+    "horizon_level": (0, 1, (0.2, -0.1), "LIVE", True),
+    "horizon_tilted": (0, 1, (-12.0, 18.0), "LIVE", False),
+    "horizon_stale": (0, 1, (1.0, 1.0), "NO DATA", False),
     "levelling_wedges": (1, 0, (3.7, -0.2), "LIVE", False),
     "levelling_corners": (1, 1, (3.7, -0.2), "LIVE", False),
     "levelling_level": (1, 0, (0.05, 0.02), "LIVE", False),
@@ -29,7 +35,7 @@ SCENES = {
 
 # Scenes repeated per language: every page and the longest texts.
 LANGUAGE_SCENES = (
-    "horizon_live",
+    "van_live",
     "horizon_stale",
     "levelling_wedges",
     "levelling_corners",
@@ -47,7 +53,10 @@ def test_scene_matches_golden(app, panel, request, code, name, golden):
     app.i18n.load(code)
     page, view, attitude, state, level = SCENES[name]
     app.active_screen = page
-    app.corner_view = view
+    if page == 0:
+        app.attitude_view = view
+    else:
+        app.corner_view = view
     app.level_frame_active = level
     app.sensor.power_percent = 60
     values = None if attitude is None else sensor_values(*attitude)

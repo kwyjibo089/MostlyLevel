@@ -4,6 +4,11 @@ Notable project changes are recorded here. This file was introduced with the ini
 
 ## Unreleased
 
+- The first page is now **ATTITUDE**, with two sub-pages chosen by tabs at its top, like LEVELLING (owner request):
+  - **VAN** (default): the tilting rear and side views of the van;
+  - **HORIZON**: the earlier virtual horizon, restored as it was (moving sky and ground, pitch ladder, curved scale), with the van seen from behind as the fixed symbol instead of the side view.
+
+  CALIBRATE and the language button moved one row down to make room for the tabs, on both views. New texts for ATTITUDE, VAN, and HORIZON in all four languages. Reference images regenerated and reviewed. Stable on the board in 3-minute stress runs of each view.
 - HORIZON now shows the van itself tilting, instead of a moving horizon (owner choice):
   - the van seen from behind tilts with roll (left side up turns it clockwise);
   - the van seen from the right tilts with pitch (front up lifts its nose);
