@@ -186,6 +186,10 @@ tools/test.sh --update-golden
 
 When a reference image differs, the test writes the actual image to `tests/golden/_actual/`; in CI it is attached to the run as the `golden-actual` artifact. GitHub Actions (`.github/workflows/ci.yml`) runs `tools/test.sh` for every pull request into `main` and after each merge, then builds the `.mpy` bundle and attaches it to the run as the `mostlylevel-mpy-<commit>` artifact; its files can be copied to the board as they are.
 
+## License
+
+MostlyLevel's own code is licensed under the [MIT License](LICENSE). The ILI9341 initialisation values and the bitmap font come from Adafruit's BSD-licensed libraries, the firmware image is MicroPython (MIT, with bundled components under their own licenses), and `reference/` is Espressif's Apache-2.0 board-support code. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for details and the required notices.
+
 ## Documentation
 
 - [Project context](PROJECT_CONTEXT.md) — current project snapshot and status vocabulary.
