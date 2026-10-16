@@ -20,13 +20,13 @@ def snapshot(panel):
 def full_direct_redraw(app, panel, values, state="LIVE"):
     """Reference image: redraw everything without the strip compositor."""
     saved_pixels = snapshot(panel)
-    renderer = app.horizon_renderer
-    app.horizon_renderer = None
+    renderer = app.page_renderer
+    app.page_renderer = None
     try:
         app.draw_dashboard(values, state)
         return snapshot(panel)
     finally:
-        app.horizon_renderer = renderer
+        app.page_renderer = renderer
         panel.pixels = saved_pixels
 
 
@@ -119,7 +119,7 @@ def test_strip_buffer_falls_back_to_smaller_rows(app, monkeypatch):
             self.rows = rows
 
     monkeypatch.setattr(app, "StripRenderer", FlakyRenderer, raising=False)
-    renderer = app.create_horizon_renderer()
+    renderer = app.create_page_renderer()
     assert sizes == [40, 20, 10]
     assert renderer.rows == 10
 
@@ -192,3 +192,55 @@ def test_glyph_runs_cover_exactly_the_set_pixels():
             (col, row) for col, bits in enumerate(glyph) for row in range(8) if bits & (1 << row)
         }
         assert pixels == expected
+
+
+def test_levelling_updates_go_through_the_compositor(app, panel):
+    app.active_screen = 1
+    app.corner_view = 1
+    app.draw_dashboard(sensor_values(2.0, 1.0), "LIVE")
+    direct_fills = []
+    real_fill_rect = app.lcd.fill_rect
+
+    def update(values):
+        app.lcd.fill_rect = lambda *args: direct_fills.append(args)
+        try:
+            app.update_corner_heights(values)
+        finally:
+            app.lcd.fill_rect = real_fill_rect
+
+    panel.pixel_bytes = 0
+    update(sensor_values(-3.0, 2.0))
+    assert direct_fills == []
+    # Only the changed value lines are resent, not whole strips.
+    value_line_bytes = (112 - 2) * app.CORNER_VALUE_HEIGHT * 2
+    assert 0 < panel.pixel_bytes <= 4 * value_line_bytes
+    assert snapshot(panel) == full_direct_redraw(app, panel, sensor_values(-3.0, 2.0))
+
+    # A wedge ranking swap changes labels: the page is composited instead.
+    app.corner_view = 0
+    app.draw_dashboard(sensor_values(2.0, 1.0), "LIVE")
+    before = app.corner_content
+    update(sensor_values(2.0, -1.0))
+    assert [label for label, _ in app.corner_content] != [label for label, _ in before]
+    assert direct_fills == []
+    assert snapshot(panel) == full_direct_redraw(app, panel, sensor_values(2.0, -1.0))
+
+
+def test_page_and_tab_switches_do_not_clear_the_screen(app_with_touch, fake_clock, touch, panel):
+    from test_app_flow import go_live, tap
+
+    app = app_with_touch
+    go_live(app, fake_clock)
+    clears = []
+    real_clear = app.g.clear
+    app.g.clear = lambda colour=0: (clears.append(colour), real_clear(colour))
+
+    nav_y = app.NAV_Y + app.NAV_HEIGHT // 2
+    tabs_y = app.CORNER_TABS_Y + app.NAV_HEIGHT // 2
+    for point in ((180, nav_y), (180, tabs_y), (60, tabs_y), (60, nav_y)):
+        tap(app, fake_clock, touch, point)
+        assert clears == [], point
+        # The reference redraw below clears the screen itself.
+        assert snapshot(panel) == full_direct_redraw(app, panel, app.sensor.latest), point
+        clears.clear()
+    assert app.active_screen == 0

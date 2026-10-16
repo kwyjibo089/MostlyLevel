@@ -62,8 +62,9 @@ RENDER_INTERVAL_MS = 100
 ATTITUDE_REDRAW_THRESHOLD_DEG = 0.2
 SENSOR_STALE_MS = 1500
 BATTERY_POLL_INTERVAL_MS = 60000
-# HORIZON page strip buffer height: 240 * rows * 2 bytes (19.2 KB at 40).
-# If allocation fails at startup, smaller strips are tried. Untested value.
+# Page strip buffer height, shared by HORIZON and LEVELLING: 240 * rows * 2
+# bytes (19.2 KB at 40). If allocation fails at startup, smaller strips are
+# tried. Untested value.
 HORIZON_STRIP_ROWS = 40
 
 # ILI9341 SPI wiring for the current board setup.
