@@ -169,7 +169,7 @@ def test_cached_layers_match_fresh_drawing(app):
 
     app.layer_cache.clear()
     first = app.horizon_page_items(3.0, -2.0, {"pitch": 3.0, "roll": -2.0}, True)
-    assert set(app.layer_cache) == {"arc", "van", "calibrate", "level"}
+    assert set(app.layer_cache) == {"arc", "van", "calibrate", "language", "level"}
     assert list(app.layer_cache["arc"]) == fresh(app.draw_pitch_arc)
     assert list(app.layer_cache["van"]) == fresh(app.draw_van_side, app.HORIZON_CENTER_Y)
     assert list(app.layer_cache["calibrate"]) == fresh(app.draw_calibrate_button)
