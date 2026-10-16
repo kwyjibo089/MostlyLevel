@@ -1,210 +1,226 @@
 # MostlyLevel
 
-MostlyLevel is a campervan levelling system prototype. The MicroPython app shows the van's pitch and roll on an ILI9341 display as two tilting views of the van: from behind, tilting with roll, and from the right, tilting with pitch, each on fixed level ground, using notifications from a WT901BLE67-like sensor. The BLE decoder also provides yaw, but the display does not use it.
+[![CI](https://github.com/kwyjibo089/MostlyLevel/actions/workflows/ci.yml/badge.svg)](https://github.com/kwyjibo089/MostlyLevel/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-## Screenshots
+**A touchscreen levelling display for campervans.** A small ESP32-S3 display reads a Bluetooth tilt sensor mounted in the van and shows, live, how the van is tilted and how much to lift each wheel to get it level.
 
-### ATTITUDE
+<p>
+  <img src="assets/readme-van-live.png" width="200" alt="ATTITUDE page, VAN view: the van from behind and from the side, tilted like the real van">
+  <img src="assets/readme-horizon-live.png" width="200" alt="ATTITUDE page, HORIZON view: aircraft-style virtual horizon">
+  <img src="assets/readme-levelling-wedges.png" width="200" alt="LEVELLING page, 2 WEDGES view: the two wheels to lift and by how much">
+  <img src="assets/readme-van-level.png" width="200" alt="Level: a green frame surrounds the whole screen">
+</p>
 
-![ATTITUDE screen, HORIZON view, with the virtual horizon and pitch and roll readouts](assets/screenshot1.png)
+*Screens as drawn by the app (240 × 320 px, shown at 2×). The images are rendered from the app's own drawing code by the desktop tests; a screenshot taken on the device matched them.*
 
-The main screen, **ATTITUDE**, has two views, chosen with the tabs at its top. **VAN** (the default) shows the van from behind, tilting with roll, and from the right, tilting with pitch; each pivots on its lower wheel, and the edge of its ground turns green while that axis is level. The tilt is drawn three times the measured angle (`VAN_TILT_GAIN`, up to `VAN_TILT_MAX_DEG`) so small slopes are visible. **HORIZON** is the virtual horizon: moving sky and ground, pitch ladder, and curved scale, with the van seen from behind as the fixed symbol. Both show the true pitch and roll readouts and the sensor connection and battery status. (The screenshots show an earlier version of the HORIZON view, with a side-view van and the buttons one row higher.)
+> **Status: working prototype.** It runs in the owner's van (a Fiat Ducato-style campervan) and is used day to day. Several things are still assumptions; see [What is verified](#what-is-verified). This README is also the project's state summary for other tools and assistants (for example, enclosure design in Claude Desktop with Fusion): it describes the code as it is on `main`.
 
-![ATTITUDE screen, HORIZON view, with a green frame when the camper is level](assets/screenshot.png)
+## Contents
 
-The green frame appears when both pitch and roll are within ±0.5°.
+- [Features](#features)
+- [Hardware](#hardware)
+- [How it works](#how-it-works)
+- [Getting started](#getting-started)
+- [Using MostlyLevel](#using-mostlylevel)
+- [Configuration](#configuration)
+- [Development](#development)
+- [What is verified](#what-is-verified)
+- [Enclosure design notes](#enclosure-design-notes)
+- [Towards a product](#towards-a-product)
+- [Repository layout](#repository-layout)
+- [License](#license)
 
-### LEVELLING — 4 CORNERS
+## Features
 
-![LEVELLING screen showing estimated lift heights for all four corners](assets/screenshot2.png)
+- **Two ways to read the van's attitude** on the ATTITUDE page:
+  - **VAN**: the van seen from behind tilts with roll, and seen from the right it tilts with pitch. Each stands on level ground and pivots on its lower wheel; the tilt is drawn 3× exaggerated so small slopes are visible.
+  - **HORIZON**: an aircraft-style attitude indicator (moving sky and ground, pitch ladder, curved scale) with the van seen from behind as the fixed symbol.
+- **Wedge advice** on the LEVELLING page: **2 WEDGES** names the two wheels to lift and by how many centimetres; **4 CORNERS** shows all four. Computed from the van's wheelbase and track widths.
+- **Level indicator**: a green frame around the whole screen while pitch and roll are both within ±0.5° (with hysteresis, so it does not flicker at the edge).
+- **Calibration**: hold **CALIBRATE** for one second to make the current attitude the level reference; it survives restarts.
+- **Four languages**: English, German, French, Spanish, switchable on the device (hold the language button); the choice survives restarts.
+- **Sensor status**: live, stale, or disconnected state and the sensor's battery level in the header, with clear warnings when data is missing.
+- **Robust for long runs**: automatic Bluetooth reconnection and recovery, and the app restarts the board after repeated errors instead of freezing with a stale "level" picture.
+- **Flicker-free drawing**: pages are composited off-screen in strips and sent to the display in one transfer per strip.
 
-This view shows the estimated lift height at each wheel corner.
+## Hardware
 
-### LEVELLING — 2 WEDGES
+| Part | What is used | Notes |
+| --- | --- | --- |
+| Display board | ESP32-S3 2.8" display board, ES3C28P family | 240 × 320 ILI9341 IPS display on SPI, capacitive touch on I2C. Vendor documentation: [lcdwiki 2.8inch ESP32-S3 Display](https://www.lcdwiki.com/2.8inch_ESP32-S3_Display). |
+| Firmware | MicroPython 1.29.0, `ESP32_GENERIC_S3` | The image in `firmware/` is byte-identical to the official download. |
+| Tilt sensor | WT901BLE67-style BLE inclinometer | Sends attitude notifications over Bluetooth LE; battery powered. Configured by its BLE address in `src/config.py`. |
+| Power | USB-C, 5 V | The board also has a Li-Po connector with charger (not used by the app). |
 
-![LEVELLING screen showing the two corners with the largest lift estimates](assets/screenshot3.png)
+**Pin assignments** (from the vendor's board-support package, matching the app):
 
-This view ranks the two corners with the largest estimated lift amounts for a two-wedge setup.
+| Signal | GPIO |
+| --- | --- |
+| LCD SPI SCK / MOSI / MISO | 12 / 11 / 13 |
+| LCD CS / DC / backlight | 10 / 46 / 45 |
+| Touch I2C SCL / SDA, reset | 15 / 16, 18 (address `0x38`) |
 
-## Current status
+The vendor documentation lists the touch controller as an FT6336G; the app talks to it with a minimal FT5x06-compatible reader. More detail, including what is unconfirmed, is in [docs/hardware.md](docs/hardware.md).
 
-- `src/app.py` provides two touch-selectable pages: **ATTITUDE** (sub-pages **VAN** and **HORIZON**) and **LEVELLING** for the corner lift estimates. The levelling page has **2 WEDGES** and **4 CORNERS** views; the two-wedge view is selected by default. The top bar shows the latest sensor battery percentage beside the BLE status.
-- The display uses decoded pitch and roll from the WT901 BLE client and redraws the readouts and vans when either changes by at least 0.2°. The status header redraws at startup or when connection or battery status changes. Yaw is not displayed.
-- On every page and view, a green frame around the whole screen (header and menu included) turns on when live pitch and roll are both within ±0.5° and stays on until either exceeds ±0.7°. These thresholds are configurable in `src/config.py`; the behavior has not yet been verified on hardware.
-- If the sensor is stale or disconnected, the app displays a prominent warning and red frame instead of leaving a green level indication.
-- Dashboard operation and BLE connection/notification behavior remain unverified. An initial LCD memory-read screenshot attempt returned all-zero pixels; the replacement software-rendered screenshot path has not yet been tested on hardware. Protocol assumptions, physical board variant, and installed firmware also remain unverified.
+## How it works
 
-The **2 WEDGES** view ranks wheel corners by estimated lift and shows the two largest amounts. The **4 CORNERS** view shows all four estimates. Both use the owner-provided 4,035 mm wheelbase and 1,810/1,790 mm front/rear track widths with live vehicle pitch and roll. The calculation assumes the sensor is mounted level with the chassis at the midpoint of the wheelbase and track, positive pitch means front-high, and positive roll means left-high. These are geometric estimates; after placing wedges, recheck the live readings and adjust as needed. The pitch and roll signs were confirmed on the installed van (2026-10-16); the accuracy of the lift amounts has not been measured.
+```
+WT901 sensor ──BLE notify──▶ ble_read.py ──latest sample──▶ app.py step()  (every ~30 ms)
+                               ▲     │                               ├─ vehicle pitch/roll (axis mapping, calibration)
+                               └─────┘ reconnect / recover           ├─ ATTITUDE: vans.py (VAN) or the horizon (HORIZON)
+FT5x06 touch ──I2C──▶ touch.py ──taps, long presses────────────────▶ ├─ LEVELLING: corner lift estimates
+                                                                     └─ compositor.py ──strips──▶ ili9341.py ──SPI──▶ LCD
+```
 
-### Language
+- `main.py` imports `app.py` and calls `app.run()`: `setup()` once, then `step()` in a loop. BLE callbacks only store the latest sample; all drawing happens in `step()`.
+- Pages are recorded as filled rectangles (plus small bitmaps for pictures such as the vans and the arc), composited into a 240 × 40 strip buffer, and sent strip by strip. Strips whose content did not change are skipped.
+- The vans are vector shapes generated on the desktop (`tools/make_vans.py` → `src/van_shapes.py`) and rotated on the board with integer maths, then filled with `framebuf.poly()`.
+- Screen texts come from `src/lang_<code>.json`; only the active language is kept in memory.
 
-On the **ATTITUDE** screen (either view), press and hold (about 1 s) the cyan language button at the left, below the VAN/HORIZON tabs and on the same line as **CALIBRATE** (it shows **EN**, **DE**, **FR**, or **ES**), to switch to the next language; the screen redraws at once and the choice is saved in `/language.cfg` on the ESP32, so it survives restarts. Numbers use a decimal comma in French and Spanish and a decimal point in English and German (the owner's Swiss convention); the separator is the `decimal` entry in each language file.
+More: [docs/architecture.md](docs/architecture.md) and the decision log in [docs/decisions.md](docs/decisions.md).
 
-The screen texts live in `src/lang_en.json`, `src/lang_de.json`, `src/lang_fr.json`, and `src/lang_es.json`, one key per text, written in uppercase (MicroPython only upper-cases ASCII letters). To change a text, edit the JSON file and deploy. To add a language, copy `lang_en.json` to `lang_<code>.json`, translate it, and add the code to `LANGUAGES` in `src/config.py`. The tests check that every file has every key, that every text fits its space on screen, and that the font has every character; a missing accented letter can be added to `ACCENTED` in `src/graphics.py`. The German, French, and Spanish texts were drafted by Claude and have not been reviewed by native speakers.
+## Getting started
 
-### Set the level reference
+You need the display board, a WT901BLE67-style sensor, a USB-C cable, and Python 3 on your computer.
 
-On the **ATTITUDE** screen (either view), after leveling the van with a trusted reference, press and hold the rounded yellow **CALIBRATE** button in the upper-right corner above the arc for about one second, until the bar along the button fills. A short tap does nothing, so a stray touch cannot overwrite the reference. The app records the current pitch and roll as zero offsets in `/level_reference.cfg` on the ESP32 and uses them after restart. Hold **CALIBRATE** again to replace the reference after changing the sensor mount. The button requires live sensor data. Confirm the result on the physical display before relying on it; this calibration flow has not yet been hardware-verified.
+1. **Install the tools** (in the repository root):
+
+   ```bash
+   python3 -m venv .venv
+   .venv/bin/python -m pip install -r requirements-dev.txt
+   ```
+
+2. **Flash MicroPython** if the board does not have it yet. This is MicroPython's standard procedure for ESP32-S3 boards; it has not been recorded for this board in the repository:
+
+   ```bash
+   .venv/bin/python -m pip install esptool
+   .venv/bin/python -m esptool --chip esp32s3 erase_flash
+   .venv/bin/python -m esptool --chip esp32s3 write_flash -z 0 firmware/ESP32_GENERIC_S3-20260824-v1.29.0.bin
+   ```
+
+3. **Point the app at your sensor**: set `SENSOR_MAC` in `src/config.py` to the sensor's BLE address (`src/ble_scan.py` lists nearby devices), and set your van's `WHEELBASE_MM`, `FRONT_TRACK_MM`, and `REAR_TRACK_MM`.
+
+4. **Deploy and start**:
+
+   ```bash
+   tools/deploy.sh            # or: tools/deploy.sh -p /dev/ttyACM0
+   ```
+
+   This precompiles the app to `.mpy`, uploads only changed files, and resets the board. The display shows *WAITING FOR SENSOR* until the sensor connects.
+
+5. **Mount and calibrate**: fix the sensor in the van, level the van with a trusted spirit level, and hold **CALIBRATE** for one second.
+
+`tools/deploy.sh -h` lists the options (upload sources instead of `.mpy`, choose a port, open the REPL, and so on).
+
+## Using MostlyLevel
+
+| Page | Shows | Touch |
+| --- | --- | --- |
+| **ATTITUDE → VAN** | Rear view (roll) and side view (pitch) of the van, P/R readouts | Tabs switch views; hold **CALIBRATE** or the language button for 1 s |
+| **ATTITUDE → HORIZON** | Virtual horizon, pitch ladder, curved scale, P/R readouts | Same as VAN |
+| **LEVELLING → 2 WEDGES** | The two wheels to lift, with heights in cm, or *NO WEDGES NEEDED* | Tabs switch views |
+| **LEVELLING → 4 CORNERS** | Lift for each wheel | Tabs switch views |
+
+- **Signs**: positive pitch = front higher; positive roll = left side higher. Left and right are as seen facing forward.
+- **HORIZON** follows the aircraft convention as seen from the driver's seat: with the left side high, the horizon rises on the right.
+- **Lift heights** are geometric estimates (the van treated as a rigid plane, the sensor assumed at the centre of the wheel footprint). Recheck the readings after placing wedges.
+- **Header**: the sensor's battery level and the connection state (LIVE, SCANNING, STALE, NO LINK, …).
+
+<p>
+  <img src="assets/readme-horizon-tilted.png" width="200" alt="HORIZON view with the van rolled and pitched">
+  <img src="assets/readme-levelling-corners.png" width="200" alt="LEVELLING page, 4 CORNERS view">
+  <img src="assets/readme-de-van-live.png" width="200" alt="VAN view in German">
+  <img src="assets/readme-fr-horizon-stale.png" width="200" alt="HORIZON view in French with a stale-data warning">
+</p>
+
+## Configuration
+
+All adjustable values live in [`src/config.py`](src/config.py), with comments saying which are tested and which are assumptions. The ones you are most likely to change:
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `SENSOR_MAC` | the owner's sensor | BLE address of the sensor to connect to |
+| `WHEELBASE_MM`, `FRONT_TRACK_MM`, `REAR_TRACK_MM` | 4035, 1810, 1790 | Van geometry for the lift estimates |
+| `DISPLAY_PITCH_SIGN`, `DISPLAY_ROLL_SIGN` | 1.0 | Flip if the sensor is mounted the other way round |
+| `LEVEL_FRAME_THRESHOLD_DEG`, `LEVEL_FRAME_RELEASE_THRESHOLD_DEG` | 0.5, 0.7 | When the green frame turns on and off |
+| `VAN_TILT_GAIN`, `VAN_TILT_MAX_DEG` | 3.0, 20 | Exaggeration of the VAN view's tilt |
+| `SCREEN_TOP_INSET` | 10 | Rows hidden by the case at the top of the display |
+| `LANGUAGES`, `DEFAULT_LANGUAGE` | en, de, fr, es; en | Languages offered by the language button |
+| `LONG_PRESS_MS` | 1000 | Hold time for CALIBRATE and the language button |
+
+Screen texts are in `src/lang_en.json`, `lang_de.json`, `lang_fr.json`, and `lang_es.json`. To add a language, copy `lang_en.json` to `lang_<code>.json`, translate it (in uppercase), and add the code to `LANGUAGES`; the tests check that every text fits its space and that the font has every character.
+
+## Development
+
+```bash
+tools/test.sh                 # ruff, MicroPython compile check (mpy-cross), pytest
+tools/test.sh --update-golden # after an intentional visual change; review the image diff
+tools/screenshot.sh [name]    # capture the running display as assets/<name>.png
+tools/make_vans.py            # regenerate src/van_shapes.py after editing the van shapes
+tools/readme_images.sh        # refresh the README images from tests/golden/
+```
+
+- **Tests** run the MicroPython sources under desktop Python with fake hardware (`tests/fakes/`: `machine`, `bluetooth`, `framebuf`, and an ILI9341 panel model that decodes the SPI commands into pixels). They cover the BLE client and decoder, levelling maths, touch, rendering invariants (composited output equals direct drawing), recovery logic, and reference images of every page and language in `tests/golden/`. Passing tests show behaviour against the fakes, not on hardware.
+- **CI** (GitHub Actions) runs `tools/test.sh` for every pull request and push to `main`, then builds the `.mpy` bundle as a downloadable artifact. `main` is protected: changes go through pull requests.
+- **Records**: [CHANGELOG.md](CHANGELOG.md) for changes, [docs/decisions.md](docs/decisions.md) for design decisions with their measurements.
+
+## What is verified
+
+| Area | State |
+| --- | --- |
+| Display output at 40 MHz SPI, flicker-free redraws | Confirmed by the owner on the device |
+| Touch navigation, tabs, long press, language switching | Used by the owner on the device |
+| BLE connection, notifications, automatic reconnect | Seen on the device; the disconnect warning was checked by switching the sensor off and on |
+| Pitch/roll signs and axis mapping | Confirmed on the installed van (front up = +pitch, left up = +roll) |
+| LEVELLING picks the correct wheels | Confirmed by the owner; the **accuracy** of the lift heights is not yet measured |
+| Battery percentage | One data point (3.85 V = 60 %); other levels unchecked |
+| Stability | Stress runs of 2–6 minutes with constant movement: no errors, steady memory (~54–76 KB free). A multi-hour run is planned |
+| Calibration saved across restarts | Implemented and tested on the desktop; not yet checked on the device |
+| Translations | Drafted by an AI assistant; not yet reviewed by native speakers |
+
+## Enclosure design notes
+
+Facts relevant to designing a case. They come from the vendor documentation unless marked otherwise; **measure the actual board before finalising a design**.
+
+- **Board size**: 50.0 × 86.0 mm, 10.6 mm thick with the touch panel (9.1 mm without). Weight about 111 g. Four mounting holes, one in each corner.
+- **Display**: 2.8" IPS, 240 × 320 px, used in **portrait** orientation with the USB-C port at the **bottom** edge.
+- **Visible area**: the UI uses the display edge to edge, so the whole display area should stay visible and touchable. The owner's current printed case hides about the top 9 pixel rows, which the app compensates for with `SCREEN_TOP_INSET` (10). A case that shows the full display lets this be set to 0.
+- **Touch**: capacitive; the cover must not press on the glass, and conductive material over the panel affects touch.
+- **Radio**: the ESP32-S3 talks to the sensor over Bluetooth; the vendor drawing shows an antenna area at the top edge of the board, so avoid metal there.
+- **Ports and power**: USB-C (5 V) at the bottom. Typical consumption about 140 mA with the display on.
+- **Sensor**: a separate battery-powered unit, mounted level and fixed in the van, within Bluetooth range of the display.
+
+## Towards a product
+
+Things to settle before selling MostlyLevel devices (a technical checklist, not legal advice):
+
+- **Per-device setup**: the sensor's BLE address, van geometry, and sensor orientation are currently set in `src/config.py`. Customers need an on-device setup flow: pairing by scanning for the sensor, entering the wheelbase and track widths, and choosing the mounting direction.
+- **Measured accuracy**: check the lift estimates against real wedge heights, and the battery bands at more levels.
+- **Long-run test**: an overnight run with the real sensor.
+- **Licences and notices**: the device firmware contains MicroPython (MIT), components under Apache-2.0, and Adafruit-derived code under BSD. Their notices must ship with each device, for example in the printed manual or on the product page; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+- **Branding**: the van drawing is styled after a Fiat Ducato but carries no logo. Using "Fiat" or "Ducato" in product names or marketing touches their trademarks.
+- **Compliance**: electronics sold in the EU, UK, Switzerland, or US generally need conformity marking (CE, UKCA, FCC) and safety documentation for the complete product, even when the radio module is already certified.
 
 ## Repository layout
 
-- `src/main.py` — startup entry point; imports `app` and calls `app.run()`.
-- `src/app.py` — dashboard, render loop (`setup()`, `step()`, `run()`).
-- `src/ili9341.py` — direct SPI display driver.
-- `src/graphics.py` — drawing helpers and bitmap font, including accented capitals.
-- `src/i18n.py` — loads the screen texts of the selected language.
-- `src/vans.py` — draws the vans: tilted on the VAN view and as the fixed symbol on the HORIZON view; `src/van_shapes.py` holds their shapes, generated by `tools/make_vans.py` (edit the shapes there and rerun it).
-- `src/lang_*.json` — screen texts per language (English, German, French, Spanish).
-- `src/compositor.py` — off-screen strip compositing used for flicker-free page redraws.
-- `src/screenshot.py` — temporary framebuffer adapter and BMP writer used for screenshots.
-- `src/ble_read.py` — BLE client and packet decoder used by the dashboard; it can also run as a serial diagnostic.
-- `src/config.py` — editable sensor, vehicle geometry, display, touch, and timing settings.
-- `src/touch.py` — minimal FT5x06 I2C touchscreen reader for the reference board wiring.
-- `src/ble_scan.py` — standalone BLE discovery diagnostic; not used by the application.
-- `tests/` — desktop tests with fake hardware modules and reference images.
-- `tools/` — deploy, screenshot, and test scripts.
-- `firmware/` — ESP32_GENERIC_S3 MicroPython firmware image.
-- `reference/esp32_s3_es3c28p/` — separate ESP-IDF board support reference; it is not integrated with the MicroPython application.
-
-## Setup and running
-
-The repository does not include a dependency manifest or hardware test procedure. The firmware image's presence does not establish that it is installed on a device. Confirm the target board, MicroPython version, and wiring before running the application.
-
-The application entry point is `src/main.py`, which starts the dashboard in `src/app.py`. The dashboard starts the BLE client in `src/ble_read.py`; `src/ble_scan.py` is an optional standalone diagnostic. The configured address, CCCD handle, UUID, and packet format assumptions have not been validated in checked-in hardware test records.
-
-### Uploading and running on an ESP32
-
-These instructions deploy the MicroPython application files to the board's filesystem. They assume the ESP32 already has a compatible MicroPython firmware installed; the firmware image in this repository has not been verified on a physical board.
-
-From the repository root, install `mpremote` in the project's virtual environment if needed:
-
-```bash
-.venv/bin/python -m pip install mpremote
-```
-
-Connect the ESP32 over USB and check that it is detected:
-
-```bash
-.venv/bin/mpremote connect list
-```
-
-Upload the application and reset the board with the deploy script:
-
-```bash
-tools/deploy.sh
-```
-
-The script first builds `build/mpy/` with `tools/build_mpy.sh`: every module is precompiled to `.mpy` with `mpy-cross`, except `main.py` (MicroPython only starts `main.py` from source) and `config.py` (kept readable and editable), and `ble_scan.py` is left out. Precompiled modules start faster (about 0.2 s instead of 0.7 s to import the app, measured on the board) and spare the board compiling `app.py`; steady-state free memory is about the same either way (see `docs/decisions.md`). In one `mpremote` session the script then checks that the board accepts the `.mpy` version, copies the bundle to the filesystem root, deletes stale `.py` copies of precompiled modules (MicroPython would load `app.py` before `app.mpy`), and resets the board. `mpremote` compares each file's SHA-256 hash with the copy on the board and skips unchanged files, so you can run the script after any edit. It needs the dev tools from `requirements-dev.txt` (see "Tests and CI"); `mpy-cross` 1.29 matches the board's MicroPython 1.29.
-
-Options: `-s` uploads the `.py` sources instead of `.mpy` (and removes stale `.mpy` files), `-p PORT` selects a serial port instead of `auto`, `-f` copies files even if unchanged, `-n` skips the reset, `-r` opens the REPL instead of resetting, and file arguments (for example `tools/deploy.sh src/ble_scan.py`) upload only those files as they are. The script never touches `boot.py`, the level reference, or other files on the board.
-
-To copy source files one at a time instead:
-
-```bash
-.venv/bin/mpremote connect auto fs cp src/config.py :config.py
-.venv/bin/mpremote connect auto fs cp src/main.py :main.py
-.venv/bin/mpremote connect auto fs cp src/app.py :app.py
-.venv/bin/mpremote connect auto fs cp src/ili9341.py :ili9341.py
-.venv/bin/mpremote connect auto fs cp src/graphics.py :graphics.py
-.venv/bin/mpremote connect auto fs cp src/compositor.py :compositor.py
-.venv/bin/mpremote connect auto fs cp src/ble_read.py :ble_read.py
-.venv/bin/mpremote connect auto fs cp src/touch.py :touch.py
-.venv/bin/mpremote connect auto fs cp src/screenshot.py :screenshot.py
-```
-
-The files belong in the root because `main.py` and `app.py` import the modules by name. `ble_scan.py` is a separate discovery diagnostic and is not needed to run the dashboard.
-
-### Configuration
-
-Edit `src/config.py` for the sensor MAC address, GATT UUIDs and notification handle, packet scaling and battery percentage bands, sensor-to-vehicle axis mapping and signs, van geometry, display timing, and LCD/touch pin assignments. The MAC is written as 12 hexadecimal digits without colons. Keep the ESP32's `config.py` in sync when uploading changes. Some values, including the CCCD handle and sensor axis/sign assumptions, remain unverified and should only be changed based on hardware checks.
-
-After copying, power-cycle the board. MicroPython runs the board's `main.py` at startup. To open the serial REPL and inspect output or errors, run:
-
-```bash
-.venv/bin/mpremote connect auto repl
-```
-
-If automatic connection does not find the board, use the serial port shown by `connect list` in place of `auto`. These deployment steps have not been tested against the project's physical ESP32/display/sensor setup.
-
-### Sensor battery display and diagnostic
-
-The dashboard requests the sensor power register after BLE becomes live and then once per minute. It shows the latest percentage beside the `LIVE` status; until the first reply, the percentage area stays blank. The conversion uses the voltage-to-percentage bands published for a related WT9011DCL-BT50 model. On the connected unit, raw value `385` decoded to `3.85 V`, matching the Android app's 60% reading. The percentage conversion still needs comparison at other battery levels on this exact sensor.
-
-To use the dashboard battery display, deploy the app with `tools/deploy.sh`. To inspect the reading manually, let the dashboard connect to the sensor, then open the REPL and interrupt the app with Ctrl+C:
-
-```bash
-.venv/bin/mpremote connect auto repl
-```
-
-At the MicroPython prompt, request the value and check the response:
-
-```python
-app.sensor.request_power_read()
-import time
-time.sleep_ms(1000)
-print(app.sensor.last_power_response)
-print(app.sensor.power_raw, app.sensor.power_voltage, app.sensor.power_percent)
-```
-
-The connected unit returned a `55 71` register response, with `power_raw` equal to `385`, `power_voltage` equal to `3.85`, and `power_percent` equal to `60`. If these values remain `None` on another attempt, the expected power-register response was not received during that attempt.
-
-### Capturing a display screenshot
-
-The app can render the last displayed attitude into small temporary RGB565 strips and save it as `/screenshot.bmp` on the ESP32. It renders in 8-row strips to avoid allocating a full-screen buffer. This reproduces the app's last rendered UI state; it does not read pixels back from the LCD controller. Upload `screenshot.py` as shown above before using this feature.
-
-With the app running on the board, capture the current screen as a PNG in `assets/`:
-
-```bash
-tools/screenshot.sh                # assets/screenshot.png
-tools/screenshot.sh levelling      # assets/levelling.png
-```
-
-The script interrupts the app, calls `save_screenshot()` on the board, copies the BMP to a temporary folder and deletes it from the board, converts it to PNG with ImageMagick (`magick`), and resets the board so the app starts again. The PNG is named after the given name without its extension, so `corners.bmp` and `wedges.png` give `assets/corners.png` and `assets/wedges.png`; on the board, a name without `.bmp` gets `.bmp` appended. Options: `-p PORT` selects a serial port instead of `auto`, and `-n` leaves the app stopped. It uses `mpremote resume` so the board is not soft-reset before the capture, which would clear the screen state being captured.
-
-To capture manually instead, open the device REPL and interrupt the running application with Ctrl+C. Then call:
-
-```python
-save_screenshot("/screenshot.bmp")
-```
-
-Exit the REPL and copy the image into the screenshots directory:
-
-```bash
-mkdir -p screenshots
-.venv/bin/mpremote connect auto fs cp :screenshot.bmp ./screenshots/screenshot1.bmp
-```
-
-You can then open `screenshots/screenshot1.bmp` or convert it to PNG for display in Markdown. The device needs enough free RAM for a small strip buffer and enough filesystem space for the BMP.
-
-## Tests and CI
-
-The tests run the MicroPython sources under desktop Python with stand-ins for the firmware modules (`machine`, `bluetooth`, `framebuf`) in `tests/fakes/`. The fake LCD decodes the ILI9341 command stream into pixels, so rendering is checked exactly as the driver would draw it. They cover packet decoding, the BLE client handshake, levelling maths, axis mapping and calibration, touch targets, the display driver and compositor, rendering invariants, and reference images of each page in `tests/golden/`. They do not exercise the real board, sensor, or touchscreen.
-
-Install the tools once, then run everything CI runs (ruff, a MicroPython compile check with `mpy-cross`, and pytest):
-
-```bash
-.venv/bin/python -m pip install -r requirements-dev.txt
-tools/test.sh
-```
-
-After an intentional visual change, regenerate the reference images and review them in the diff before committing:
-
-```bash
-tools/test.sh --update-golden
-```
-
-When a reference image differs, the test writes the actual image to `tests/golden/_actual/`; in CI it is attached to the run as the `golden-actual` artifact. GitHub Actions (`.github/workflows/ci.yml`) runs `tools/test.sh` for every pull request into `main` and after each merge, then builds the `.mpy` bundle and attaches it to the run as the `mostlylevel-mpy-<commit>` artifact; its files can be copied to the board as they are.
+| Path | Contents |
+| --- | --- |
+| `src/main.py`, `src/app.py` | Entry point; the app: pages, touch handling, main loop |
+| `src/ble_read.py` | BLE client, packet decoder, reconnection and recovery |
+| `src/vans.py`, `src/van_shapes.py` | Tilted van drawing; generated van shapes |
+| `src/compositor.py` | Off-screen strip compositing and bitmaps |
+| `src/graphics.py`, `src/ili9341.py`, `src/touch.py` | Drawing helpers and font, display driver, touch reader |
+| `src/i18n.py`, `src/lang_*.json` | Language loading and the screen texts |
+| `src/config.py` | All settings |
+| `src/screenshot.py`, `src/ble_scan.py` | Screenshot writer; standalone BLE scan diagnostic |
+| `tests/` | Desktop tests, fake hardware, reference images |
+| `tools/` | Deploy, build, test, screenshot, van-shape, and README-image scripts |
+| `firmware/` | The MicroPython firmware image and its licence |
+| `reference/esp32_s3_es3c28p/` | The vendor's ESP-IDF board-support package, kept as reference only (not used by the app) |
+| `docs/` | Architecture, hardware, and decision records |
+| `assets/` | README images and screenshots |
 
 ## License
 
-MostlyLevel's own code is licensed under the [MIT License](LICENSE). The ILI9341 initialisation values and the bitmap font come from Adafruit's BSD-licensed libraries, the firmware image is MicroPython (MIT, with bundled components under their own licenses), and `reference/` is Espressif's Apache-2.0 board-support code. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for details and the required notices.
-
-## Documentation
-
-- [Project context](PROJECT_CONTEXT.md) — current project snapshot and status vocabulary.
-- [Architecture](docs/architecture.md) — display and BLE code paths and reference BSP boundary.
-- [Hardware](docs/hardware.md) — source-configured pin map and unresolved hardware details.
-- [Decisions and open questions](docs/decisions.md) — implementation choices, assumptions, and questions to resolve.
-- [Changelog](CHANGELOG.md) — notable changes.
-
-See [AGENTS.md](AGENTS.md) for guidance intended for future development sessions.
+MostlyLevel's own code is licensed under the [MIT License](LICENSE). The ILI9341 initialisation values and the bitmap font come from Adafruit's BSD-licensed libraries, the firmware image is MicroPython (MIT, with bundled components under their own licences), and `reference/` is Espressif's Apache-2.0 board-support code. Details and the required notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
