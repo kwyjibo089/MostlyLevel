@@ -69,7 +69,7 @@ HORIZON_STRIP_ROWS = 40
 # ILI9341 SPI wiring for the current board setup.
 LCD_SPI_ID = 2
 # 40 MHz matches the reference BSP's LCD pixel clock for this board. Ran on
-# the board 2026-10-16 (previously 20 MHz); image quality not yet confirmed.
+# the board 2026-10-16 (previously 20 MHz); owner confirmed a clean image.
 LCD_SPI_BAUDRATE = 40000000
 LCD_SPI_SCK_PIN = 12
 LCD_SPI_MOSI_PIN = 11
