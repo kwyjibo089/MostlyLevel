@@ -62,6 +62,13 @@ RENDER_INTERVAL_MS = 100
 ATTITUDE_REDRAW_THRESHOLD_DEG = 0.2
 SENSOR_STALE_MS = 1500
 BATTERY_POLL_INTERVAL_MS = 60000
+# Main-loop error handling: after an unexpected error the loop waits
+# STEP_ERROR_RETRY_MS and redraws; after STEP_ERROR_RESET_COUNT errors in a
+# row, or SETUP_ERROR_RESET_MS after a failed startup, the board hard-resets.
+# Untested values.
+STEP_ERROR_RETRY_MS = 1000
+STEP_ERROR_RESET_COUNT = 5
+SETUP_ERROR_RESET_MS = 10000
 # Page strip buffer height, shared by HORIZON and LEVELLING: 240 * rows * 2
 # bytes (19.2 KB at 40). If allocation fails at startup, smaller strips are
 # tried. Untested value.

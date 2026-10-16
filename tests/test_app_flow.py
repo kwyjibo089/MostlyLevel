@@ -227,3 +227,76 @@ def test_main_entry_point_runs_app(monkeypatch):
     assert calls == ["run"]
     # tools/screenshot.sh calls save_screenshot() in the REPL after Ctrl+C.
     assert namespace["save_screenshot"] is fake_app.save_screenshot
+
+
+class StopLoop(BaseException):
+    """Ends run()'s endless loop in a test, like Ctrl+C on the board."""
+
+
+def run_until(app, monkeypatch, steps):
+    """Run app.run() with setup skipped and step() replaced by `steps`."""
+    import fakehw
+    import machine
+
+    calls = iter(steps)
+
+    def fake_step():
+        next(calls, stop)()
+
+    monkeypatch.setattr(app, "setup", lambda: None)
+    monkeypatch.setattr(app, "step", fake_step)
+    with pytest.raises((StopLoop, machine.BoardReset)) as stopped:
+        app.run()
+    return stopped.type, fakehw.resets
+
+
+def fail():
+    raise OSError("SPI bus error")
+
+
+def stop():
+    raise StopLoop
+
+
+def test_step_errors_are_survived(app, monkeypatch, capsys):
+    app.screen_initialized = True
+    stopped, resets = run_until(app, monkeypatch, [fail, lambda: None, fail, fail, stop])
+    assert stopped is StopLoop and resets == 0
+    assert "Main loop step failed: OSError('SPI bus error')" in capsys.readouterr().out
+    assert app.screen_initialized is False  # Forces a full redraw.
+
+
+def test_repeated_step_errors_reset_the_board(app, monkeypatch):
+    from config import STEP_ERROR_RESET_COUNT
+
+    stopped, resets = run_until(app, monkeypatch, [fail] * STEP_ERROR_RESET_COUNT + [stop])
+    assert resets == 1
+
+
+def test_setup_error_resets_the_board(app, monkeypatch, fake_clock):
+    import fakehw
+    import machine
+    from config import SETUP_ERROR_RESET_MS
+
+    def broken_setup():
+        raise OSError("LCD not responding")
+
+    monkeypatch.setattr(app, "setup", broken_setup)
+    start = fake_clock.ticks_ms()
+    with pytest.raises(machine.BoardReset):
+        app.run()
+    assert fakehw.resets == 1
+    assert fake_clock.ticks_ms() - start >= SETUP_ERROR_RESET_MS
+
+
+def test_keyboard_interrupt_still_stops_the_loop(app, monkeypatch):
+    import fakehw
+
+    def interrupt():
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(app, "setup", lambda: None)
+    monkeypatch.setattr(app, "step", interrupt)
+    with pytest.raises(KeyboardInterrupt):
+        app.run()
+    assert fakehw.resets == 0
