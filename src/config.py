@@ -61,6 +61,15 @@ LEVEL_FRAME_RELEASE_THRESHOLD_DEG = 0.7
 RENDER_INTERVAL_MS = 100
 ATTITUDE_REDRAW_THRESHOLD_DEG = 0.2
 SENSOR_STALE_MS = 1500
+# BLE link recovery (see WT901BLEClient.maintain): retry after an ERROR, give
+# up on a connection setup or scan that never completes, and reconnect when a
+# connected sensor sends nothing. After SENSOR_RECOVERY_RESET_COUNT
+# recoveries without new data, the board hard-resets. Untested values.
+SENSOR_ERROR_RETRY_MS = 5000
+SENSOR_SETUP_TIMEOUT_MS = 20000
+SENSOR_SCAN_TIMEOUT_MS = 30000
+SENSOR_SILENT_RECONNECT_MS = 10000
+SENSOR_RECOVERY_RESET_COUNT = 5
 BATTERY_POLL_INTERVAL_MS = 60000
 # Main-loop error handling: after an unexpected error the loop waits
 # STEP_ERROR_RETRY_MS and redraws; after STEP_ERROR_RESET_COUNT errors in a

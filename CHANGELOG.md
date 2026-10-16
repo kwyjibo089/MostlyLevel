@@ -4,6 +4,13 @@ Notable project changes are recorded here. This file was introduced with the ini
 
 ## Unreleased
 
+- The BLE client now recovers from stuck links instead of waiting for a reset. `maintain()`, called every main-loop step, disconnects if needed and rescans:
+  - after 5 s in ERROR;
+  - after 20 s stuck connecting, discovering, setting up, or disconnecting;
+  - after 30 s scanning without a scan-done event;
+  - after 10 s connected without data.
+
+  After 5 recoveries without new data the board hard-resets; a switched-off sensor just keeps scanning. Settings are in `config.py` (`SENSOR_ERROR_RETRY_MS`, `SENSOR_SETUP_TIMEOUT_MS`, `SENSOR_SCAN_TIMEOUT_MS`, `SENSOR_SILENT_RECONNECT_MS`, `SENSOR_RECOVERY_RESET_COUNT`). A forced recovery with the real sensor on the board reconnected and returned to LIVE.
 - The main loop now survives unexpected errors instead of stopping with a frozen screen: `run()` logs the error, waits 1 s, redraws everything, and hard-resets the board after 5 errors in a row; if startup fails it resets after 10 s (`STEP_ERROR_RETRY_MS`, `STEP_ERROR_RESET_COUNT`, `SETUP_ERROR_RESET_MS` in `config.py`). Ctrl+C still stops the app. Checked on the board with injected errors.
 - Faster HORIZON redraws: font glyphs are drawn as merged rects (identical runs on adjacent rows or columns combined; about half as many rects for text, pixel-identical), and the compositor sorts rects into strips with a fast path for the common single-strip case. On the board a live redraw step dropped from ~224–232 ms to ~134–141 ms (measured back to back with a stub sensor). Text on the LEVELLING page benefits too. Not yet observed by the owner.
 - Documentation only: the owner reported the composited LEVELLING page as a lot better on the device (2026-10-16).

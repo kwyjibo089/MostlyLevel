@@ -300,3 +300,30 @@ def test_keyboard_interrupt_still_stops_the_loop(app, monkeypatch):
     with pytest.raises(KeyboardInterrupt):
         app.run()
     assert fakehw.resets == 0
+
+
+def test_link_that_never_recovers_resets_the_board(app, fake_clock):
+    import fakehw
+    import machine
+    from config import SENSOR_ERROR_RETRY_MS, SENSOR_RECOVERY_RESET_COUNT
+
+    sim = SensorSimulator()
+    step(app, fake_clock)
+    with pytest.raises(machine.BoardReset):
+        for _ in range(SENSOR_RECOVERY_RESET_COUNT):
+            sim.connect(cccd_status=1)  # Notification setup keeps failing.
+            fake_clock.advance(SENSOR_ERROR_RETRY_MS)
+            step(app, fake_clock)
+            sim.disconnect()
+        step(app, fake_clock)
+    assert fakehw.resets == 1
+
+
+def test_recovery_shows_disconnected(app, fake_clock):
+    from config import SENSOR_SILENT_RECONNECT_MS
+
+    go_live(app, fake_clock)
+    fake_clock.advance(SENSOR_SILENT_RECONNECT_MS)
+    step(app, fake_clock)
+    assert app.sensor.state == "DISCONNECTING"
+    assert app.last_state == "DISCONNECTED"
