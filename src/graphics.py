@@ -55,26 +55,67 @@ FONT = {
     'Z': (97, 81, 73, 69, 67),
 }
 
-# Horizontal pixel runs per character, filled in on first use.
-GLYPH_RUNS = {}
+# Filled rects per character, worked out on first use.
+GLYPH_RECTS = {}
 
 
-def glyph_runs(glyph):
-    """Return a glyph's set pixels as (column, row, width) runs, row by row."""
+def merge_runs(lines):
+    """Merge identical runs on consecutive lines into taller rects.
+
+    `lines` holds, per line, a list of (start, length) runs. Returns
+    (start, line, length, line_count) tuples.
+    """
+    rects = []
+    open_runs = {}
+    for line, runs in enumerate(lines):
+        still_open = {}
+        for run in runs:
+            first_line = open_runs.pop(run, line)
+            still_open[run] = first_line
+        for (start, length), first_line in open_runs.items():
+            rects.append((start, first_line, length, line - first_line))
+        open_runs = still_open
+    for (start, length), first_line in open_runs.items():
+        rects.append((start, first_line, length, len(lines) - first_line))
+    return rects
+
+
+def bit_runs(bits, count):
+    """Return (start, length) runs of set bits among the lowest `count`."""
     runs = []
-    for row in range(8):
-        col = 0
-        while col < len(glyph):
-            if not glyph[col] & (1 << row):
-                col += 1
-                continue
+    start = None
+    for index in range(count + 1):
+        if index < count and bits & (1 << index):
+            if start is None:
+                start = index
+        elif start is not None:
+            runs.append((start, index - start))
+            start = None
+    return runs
 
-            run_start = col
-            col += 1
-            while col < len(glyph) and glyph[col] & (1 << row):
-                col += 1
-            runs.append((run_start, row, col - run_start))
-    return tuple(runs)
+
+def glyph_rects(glyph):
+    """Return a glyph's set pixels as few (column, row, width, height) rects.
+
+    Merges either horizontal runs over rows or vertical runs over columns,
+    whichever gives fewer rects; both cover exactly the same pixels.
+    """
+    row_lines = []
+    for row in range(8):
+        bits = 0
+        for col, column_bits in enumerate(glyph):
+            if column_bits & (1 << row):
+                bits |= 1 << col
+        row_lines.append(bit_runs(bits, len(glyph)))
+    by_rows = merge_runs(row_lines)
+
+    by_columns = [
+        (col, row, width, height)
+        for row, col, height, width in merge_runs(
+            [bit_runs(column_bits, 8) for column_bits in glyph]
+        )
+    ]
+    return tuple(by_columns if len(by_columns) < len(by_rows) else by_rows)
 
 
 class Graphics:
@@ -108,20 +149,20 @@ class Graphics:
         fill_rect = self.fill_rect
 
         for char in str(message).upper():
-            runs = GLYPH_RUNS.get(char)
-            if runs is None:
+            rects = GLYPH_RECTS.get(char)
+            if rects is None:
                 glyph = FONT.get(char)
                 if glyph is None:
                     cursor_x += 6 * scale
                     continue
-                runs = GLYPH_RUNS[char] = glyph_runs(glyph)
+                rects = GLYPH_RECTS[char] = glyph_rects(glyph)
 
-            for col, row, width in runs:
+            for col, row, width, height in rects:
                 fill_rect(
                     cursor_x + col * scale,
                     y + row * scale,
                     width * scale,
-                    scale,
+                    height * scale,
                     colour,
                 )
 

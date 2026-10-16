@@ -59,13 +59,23 @@ class StripRenderer:
         last = self.count - 1
         buckets = [[] for _ in range(self.count)]
         for item in items:
-            y = item[1]
-            first = (y - top) // rows
-            end = (y + item[3] - 1 - top) // rows
+            y = item[1] - top
+            first = y // rows
+            end = (y + item[3] - 1) // rows
+            if first == end:
+                # Most rects (text, ladder) lie within one strip.
+                if 0 <= first <= last:
+                    buckets[first].append(item)
+                continue
             if end < 0 or first > last:
                 continue
-            for index in range(max(0, first), min(last, end) + 1):
-                buckets[index].append(item)
+            if first < 0:
+                first = 0
+            if end > last:
+                end = last
+            while first <= end:
+                buckets[first].append(item)
+                first += 1
 
         framebuffer = self.framebuffer
         for index in range(self.count):

@@ -181,13 +181,19 @@ def test_cached_layers_match_fresh_drawing(app):
     assert calls == [] and again == first
 
 
-def test_glyph_runs_cover_exactly_the_set_pixels():
-    from graphics import FONT, glyph_runs
+def test_glyph_rects_cover_exactly_the_set_pixels():
+    from graphics import FONT, glyph_rects
 
     for glyph in FONT.values():
-        pixels = {
-            (x, row) for col, row, width in glyph_runs(glyph) for x in range(col, col + width)
-        }
+        rects = glyph_rects(glyph)
+        pixels = [
+            (x, y)
+            for col, row, width, height in rects
+            for x in range(col, col + width)
+            for y in range(row, row + height)
+        ]
+        assert len(pixels) == len(set(pixels))  # No overlaps.
+        pixels = set(pixels)
         expected = {
             (col, row) for col, bits in enumerate(glyph) for row in range(8) if bits & (1 << row)
         }
