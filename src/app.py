@@ -25,6 +25,7 @@ from config import (
     REAR_TRACK_MM,
     SCREEN_TOP_INSET,
     RENDER_INTERVAL_MS,
+    SENSOR_RECOVERY_RESET_COUNT,
     SENSOR_STALE_MS,
     SETUP_ERROR_RESET_MS,
     STEP_ERROR_RESET_COUNT,
@@ -911,6 +912,11 @@ def step():
     global last_battery_request_ms, last_battery_percent, last_state
     global last_attitude, last_level, last_render_ms, screen_initialized
     global level_frame_active, active_screen, corner_view, touch, touch_was_down
+
+    sensor.maintain()
+    if sensor.failed_recoveries >= SENSOR_RECOVERY_RESET_COUNT:
+        print("Sensor link did not recover; restarting the board.")
+        machine.reset()
 
     now = time.ticks_ms()
     state = sensor.state

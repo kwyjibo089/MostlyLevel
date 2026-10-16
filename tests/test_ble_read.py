@@ -183,3 +183,111 @@ def test_link_lost_clears_when_notifications_run_again(client):
     sim.connect()
     assert client.state == "LIVE"
     assert client.link_lost is False
+
+
+def disconnects(ble):
+    return [call for call in ble.calls if call[0] == "gap_disconnect"]
+
+
+def test_error_is_retried_by_disconnecting(client, fake_clock):
+    from config import SENSOR_ERROR_RETRY_MS
+
+    sim = SensorSimulator()
+    sim.connect(cccd_status=1)
+    assert client.state == "ERROR"
+    fake_clock.advance(SENSOR_ERROR_RETRY_MS - 1)
+    client.maintain()
+    assert client.state == "ERROR"
+
+    fake_clock.advance(1)
+    client.maintain()
+    assert client.state == "DISCONNECTING"
+    assert disconnects(sim.ble) == [("gap_disconnect", client.conn_handle)]
+    assert client.failed_recoveries == 1
+
+    sim.disconnect()  # The disconnect event rescans.
+    assert client.state == "SCANNING" and client.link_lost
+    sim.connect()
+    sim.attitude(roll=1.0)
+    assert client.state == "LIVE" and client.failed_recoveries == 0
+
+
+def test_failed_scan_start_is_retried(client, fake_clock, monkeypatch):
+    from config import SENSOR_ERROR_RETRY_MS
+
+    sim = SensorSimulator()
+
+    def broken_scan(*args):
+        raise OSError(-30)
+
+    monkeypatch.setattr(sim.ble, "gap_scan", broken_scan)
+    sim.scan_done()  # Restarting the timed scan fails.
+    assert client.state == "ERROR"
+    monkeypatch.undo()
+
+    fake_clock.advance(SENSOR_ERROR_RETRY_MS)
+    client.maintain()
+    assert client.state == "SCANNING"
+    assert disconnects(sim.ble) == []
+
+
+def test_stalled_connection_setup_is_abandoned(client, fake_clock):
+    from config import SENSOR_SETUP_TIMEOUT_MS
+
+    sim = SensorSimulator()
+    sim.advertise()  # Connect requested, but no connect event ever comes.
+    assert client.state == "CONNECTING"
+    fake_clock.advance(SENSOR_SETUP_TIMEOUT_MS)
+    client.maintain()
+    assert client.state == "SCANNING"
+    assert len(scans_started(sim.ble)) == 2
+
+
+def test_lost_disconnect_event_falls_back_to_scanning(client, fake_clock):
+    from config import SENSOR_ERROR_RETRY_MS, SENSOR_SETUP_TIMEOUT_MS
+
+    sim = SensorSimulator()
+    sim.connect(cccd_status=1)
+    fake_clock.advance(SENSOR_ERROR_RETRY_MS)
+    client.maintain()
+    assert client.state == "DISCONNECTING"
+    fake_clock.advance(SENSOR_SETUP_TIMEOUT_MS)
+    client.maintain()  # No disconnect event: scan without disconnecting again.
+    assert client.state == "SCANNING"
+    assert len(disconnects(sim.ble)) == 1
+
+
+def test_silent_sensor_is_reconnected(client, fake_clock):
+    from config import SENSOR_SILENT_RECONNECT_MS
+
+    sim = SensorSimulator()
+    sim.connect()
+    sim.attitude(roll=1.0)
+    fake_clock.advance(SENSOR_SILENT_RECONNECT_MS - 1)
+    client.maintain()
+    assert client.state == "LIVE"
+    fake_clock.advance(1)
+    client.maintain()
+    assert client.state == "DISCONNECTING"
+    assert client.latest is None
+
+
+def test_stuck_scan_is_restarted(client, fake_clock):
+    from config import SENSOR_SCAN_TIMEOUT_MS
+
+    sim = SensorSimulator()
+    fake_clock.advance(SENSOR_SCAN_TIMEOUT_MS)
+    client.maintain()  # The scan-done event never came.
+    assert client.state == "SCANNING"
+    assert len(scans_started(sim.ble)) == 2
+    assert client.failed_recoveries == 1
+
+
+def test_a_switched_off_sensor_is_not_a_failure(client, fake_clock):
+    sim = SensorSimulator()
+    for _ in range(20):
+        fake_clock.advance(15000)
+        sim.scan_done()  # Timed scans keep ending without finding it.
+        client.maintain()
+    assert client.state == "SCANNING"
+    assert client.failed_recoveries == 0

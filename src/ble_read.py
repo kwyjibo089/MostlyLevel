@@ -7,6 +7,7 @@ from config import (
     SENSOR_ATTITUDE_PACKET_TYPE,
     SENSOR_BATTERY_PERCENT_BANDS,
     SENSOR_CCCD_HANDLE,
+    SENSOR_ERROR_RETRY_MS,
     SENSOR_GYRO_RANGE_DPS,
     SENSOR_MAC,
     SENSOR_NAME,
@@ -16,6 +17,9 @@ from config import (
     SENSOR_POWER_REGISTER,
     SENSOR_POWER_VOLTAGE_DIVISOR,
     SENSOR_RAW_FULL_SCALE,
+    SENSOR_SCAN_TIMEOUT_MS,
+    SENSOR_SETUP_TIMEOUT_MS,
+    SENSOR_SILENT_RECONNECT_MS,
     SENSOR_REGISTER_PACKET_TYPE,
     SENSOR_WRITE_UUID,
 )
@@ -135,6 +139,9 @@ class WT901BLEClient:
         self.write_handle = None
         self.connected = False
         self.state = "IDLE"
+        self.state_since_ms = time.ticks_ms()
+        # Recoveries since the last attitude packet; see maintain().
+        self.failed_recoveries = 0
         # True from a lost connection until notifications run again, so the
         # display can report the loss while the client rescans.
         self.link_lost = False
@@ -150,26 +157,76 @@ class WT901BLEClient:
         self.ble.irq(self._irq)
         self._start_scan()
 
+    def _set_state(self, state):
+        self.state = state
+        self.state_since_ms = time.ticks_ms()
+
+    def maintain(self):
+        """Recover from a stuck link; call this regularly from the main loop.
+
+        BLE callbacks alone cannot notice that an expected event never came,
+        and some failures leave the client in ERROR. After a timeout the
+        client disconnects if needed and scans again.
+        """
+        now = time.ticks_ms()
+        state = self.state
+        age = time.ticks_diff(now, self.state_since_ms)
+        if state == "ERROR":
+            stuck = age >= SENSOR_ERROR_RETRY_MS
+        elif state in ("CONNECTING", "DISCOVERING", "SETTING UP", "DISCONNECTING"):
+            stuck = age >= SENSOR_SETUP_TIMEOUT_MS
+        elif state == "SCANNING":
+            # A timed scan ends with a scan-done event, which rescans.
+            stuck = age >= SENSOR_SCAN_TIMEOUT_MS
+        elif state == "LIVE":
+            stuck = (
+                time.ticks_diff(now, self.last_packet_ms) >= SENSOR_SILENT_RECONNECT_MS
+            )
+        else:
+            stuck = False
+        if stuck:
+            self._recover(state)
+
+    def _recover(self, state):
+        print("Sensor link stuck in %s; reconnecting." % state)
+        self.failed_recoveries += 1
+        self.latest = None
+        self.sequence += 1
+        if self.connected and self.conn_handle is not None and state != "DISCONNECTING":
+            self.link_lost = True
+            try:
+                self.ble.gap_disconnect(self.conn_handle)
+                # The disconnect event starts the next scan.
+                self._set_state("DISCONNECTING")
+                return
+            except Exception as exc:
+                print("Disconnect failed:", exc)
+        try:
+            self.ble.gap_scan(None)
+        except Exception:
+            pass
+        self._start_scan()
+
     def _start_scan(self):
         self.conn_handle = None
         self.notify_handle = None
         self.write_handle = None
         self.connected = False
-        self.state = "SCANNING"
+        self._set_state("SCANNING")
         print("Scanning for %s:" % SENSOR_NAME, format_address(SENSOR_MAC))
 
         try:
             self.ble.gap_scan(15000, 30000, 30000, True)
         except Exception as exc:
-            self.state = "ERROR"
+            self._set_state("ERROR")
             print("BLE scan failed:", exc)
 
     def _enable_notifications(self):
         if self.conn_handle is None or self.notify_handle is None:
-            self.state = "ERROR"
+            self._set_state("ERROR")
             return
 
-        self.state = "SETTING UP"
+        self._set_state("SETTING UP")
         try:
             # This is the handle used by the existing reader. It is not
             # derived from the discovered descriptor table yet.
@@ -181,7 +238,7 @@ class WT901BLEClient:
             )
             print("Requested sensor notifications.")
         except Exception as exc:
-            self.state = "ERROR"
+            self._set_state("ERROR")
             print("Failed to enable notifications:", exc)
 
     def request_power_read(self, keep_previous=False):
@@ -211,12 +268,12 @@ class WT901BLEClient:
 
             if bytes(addr) == SENSOR_MAC and not self.connected:
                 print("Found", SENSOR_NAME, format_address(addr), "RSSI", rssi)
-                self.state = "CONNECTING"
+                self._set_state("CONNECTING")
                 try:
                     self.ble.gap_scan(None)
                     self.ble.gap_connect(addr_type, bytes(addr))
                 except Exception as exc:
-                    self.state = "ERROR"
+                    self._set_state("ERROR")
                     print("Connection request failed:", exc)
 
         elif event == _IRQ_SCAN_DONE:
@@ -228,12 +285,12 @@ class WT901BLEClient:
         elif event == _IRQ_PERIPHERAL_CONNECT:
             self.conn_handle, addr_type, addr = data
             self.connected = True
-            self.state = "DISCOVERING"
+            self._set_state("DISCOVERING")
             print("Connected to %s." % SENSOR_NAME)
             try:
                 self.ble.gattc_discover_services(self.conn_handle)
             except Exception as exc:
-                self.state = "ERROR"
+                self._set_state("ERROR")
                 print("Service discovery failed:", exc)
 
         elif event == _IRQ_GATTC_SERVICE_RESULT:
@@ -248,10 +305,10 @@ class WT901BLEClient:
                         self.conn_handle, 1, 0xFFFF
                     )
                 except Exception as exc:
-                    self.state = "ERROR"
+                    self._set_state("ERROR")
                     print("Characteristic discovery failed:", exc)
             else:
-                self.state = "ERROR"
+                self._set_state("ERROR")
                 print("Service discovery status:", status)
 
         elif event == _IRQ_GATTC_CHARACTERISTIC_RESULT:
@@ -275,17 +332,19 @@ class WT901BLEClient:
             if status == 0 and self.notify_handle is not None:
                 self._enable_notifications()
             else:
-                self.state = "ERROR"
+                self._set_state("ERROR")
                 print("Sensor notification characteristic not found.")
 
         elif event == _IRQ_GATTC_WRITE_DONE:
             callback_conn_handle, value_handle, status = data
             if value_handle == CCCD_HANDLE_CANDIDATE and status == 0:
-                self.state = "LIVE"
+                self._set_state("LIVE")
+                # Counts as the last packet until data arrives.
+                self.last_packet_ms = time.ticks_ms()
                 self.link_lost = False
                 print("Sensor notifications enabled.")
             elif value_handle == CCCD_HANDLE_CANDIDATE:
-                self.state = "ERROR"
+                self._set_state("ERROR")
                 print("Notification setup status:", status)
 
         elif event == _IRQ_GATTC_NOTIFY:
@@ -320,6 +379,7 @@ class WT901BLEClient:
             self.latest = values
             self.last_packet_ms = time.ticks_ms()
             self.sequence += 1
+            self.failed_recoveries = 0
 
         elif event == _IRQ_PERIPHERAL_DISCONNECT:
             disconnected_handle, addr_type, addr = data

@@ -39,6 +39,9 @@ class BLE:
     def gap_connect(self, addr_type, addr):
         self.calls.append(("gap_connect", addr_type, bytes(addr)))
 
+    def gap_disconnect(self, conn_handle):
+        self.calls.append(("gap_disconnect", conn_handle))
+
     def gattc_discover_services(self, conn_handle):
         self.calls.append(("discover_services", conn_handle))
 
