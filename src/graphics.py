@@ -53,6 +53,36 @@ FONT = {
     'X': (99, 20, 8, 20, 99),
     'Y': (7, 8, 112, 8, 7),
     'Z': (97, 81, 73, 69, 67),
+    ',': (0, 224, 96, 0, 0),
+}
+
+# Accented capitals for the German, French, and Spanish texts: a full-height
+# FONT capital plus a mark. Marks above sit in rows -3 and -2 (above the
+# text line, one row clear of the letter); the cedilla sits in row 7. Marks
+# are (column, row, width, height) rects. MostlyLevel's own glyphs, not
+# derived from Adafruit's font.
+ACCENT_MARKS = {
+    'umlaut': ((1, -2, 1, 1), (3, -2, 1, 1)),
+    'acute': ((3, -3, 1, 1), (2, -2, 1, 1)),
+    'grave': ((1, -3, 1, 1), (2, -2, 1, 1)),
+    'circumflex': ((2, -3, 1, 1), (1, -2, 1, 1), (3, -2, 1, 1)),
+    'tilde': ((1, -3, 2, 1), (4, -3, 1, 1), (0, -2, 1, 1), (3, -2, 1, 1)),
+    'cedilla': ((2, 7, 2, 1),),
+}
+ACCENTED = {
+    'Ä': ('A', 'umlaut'),
+    'Ö': ('O', 'umlaut'),
+    'Ü': ('U', 'umlaut'),
+    'À': ('A', 'grave'),
+    'Á': ('A', 'acute'),
+    'É': ('E', 'acute'),
+    'È': ('E', 'grave'),
+    'Ê': ('E', 'circumflex'),
+    'Í': ('I', 'acute'),
+    'Ó': ('O', 'acute'),
+    'Ú': ('U', 'acute'),
+    'Ñ': ('N', 'tilde'),
+    'Ç': ('C', 'cedilla'),
 }
 
 # Filled rects per character, worked out on first use.
@@ -118,6 +148,15 @@ def glyph_rects(glyph):
     return tuple(by_columns if len(by_columns) < len(by_rows) else by_rows)
 
 
+def char_rects(char):
+    """Return the rects that draw `char`, or None if the font lacks it."""
+    if char in ACCENTED:
+        base, mark = ACCENTED[char]
+        return glyph_rects(FONT[base]) + ACCENT_MARKS[mark]
+    glyph = FONT.get(char)
+    return None if glyph is None else glyph_rects(glyph)
+
+
 class Graphics:
     def __init__(self, lcd):
         self.lcd = lcd
@@ -151,11 +190,11 @@ class Graphics:
         for char in str(message).upper():
             rects = GLYPH_RECTS.get(char)
             if rects is None:
-                glyph = FONT.get(char)
-                if glyph is None:
+                rects = char_rects(char)
+                if rects is None:
                     cursor_x += 6 * scale
                     continue
-                rects = GLYPH_RECTS[char] = glyph_rects(glyph)
+                GLYPH_RECTS[char] = rects
 
             for col, row, width, height in rects:
                 fill_rect(

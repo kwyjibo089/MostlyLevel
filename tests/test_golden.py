@@ -27,8 +27,24 @@ SCENES = {
 }
 
 
-@pytest.mark.parametrize("name", sorted(SCENES))
-def test_scene_matches_golden(app, panel, request, name):
+# Scenes repeated per language: every page and the longest texts.
+LANGUAGE_SCENES = (
+    "horizon_live",
+    "horizon_stale",
+    "levelling_wedges",
+    "levelling_corners",
+    "levelling_level",
+)
+CASES = [("en", name, name) for name in sorted(SCENES)] + [
+    (code, name, "%s_%s" % (code, name))
+    for code in ("de", "fr", "es")
+    for name in LANGUAGE_SCENES
+]
+
+
+@pytest.mark.parametrize("code, name, golden", CASES, ids=[case[2] for case in CASES])
+def test_scene_matches_golden(app, panel, request, code, name, golden):
+    app.i18n.load(code)
     page, view, attitude, state, level = SCENES[name]
     app.active_screen = page
     app.corner_view = view
@@ -36,4 +52,4 @@ def test_scene_matches_golden(app, panel, request, name):
     app.sensor.power_percent = 60
     values = None if attitude is None else sensor_values(*attitude)
     app.draw_dashboard(values, state)
-    assert_matches_golden(request, name, panel.pixels)
+    assert_matches_golden(request, golden, panel.pixels)

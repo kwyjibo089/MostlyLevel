@@ -9,6 +9,8 @@ from graphics import Graphics, BLACK, WHITE, CYAN, YELLOW, GREEN, GREY, RED
 from ble_read import WT901BLEClient
 from touch import TouchInput
 from compositor import DisplayList, StripRenderer
+import i18n
+from i18n import t
 from config import (
     ATTITUDE_REDRAW_THRESHOLD_DEG,
     BATTERY_POLL_INTERVAL_MS,
@@ -130,16 +132,49 @@ def clamp(value, low, high):
     return max(low, min(high, value))
 
 
+def local_number(text):
+    """Use the active language's decimal separator."""
+    return text.replace(".", t("decimal"))
+
+
 def angle_text(values, key):
     if values is None:
-        return "--.-"
-    return "%+.1f" % values[key]
+        return local_number("--.-")
+    return local_number("%+.1f" % values[key])
+
+
+# Text keys of the connection states shown in the header.
+STATUS_KEYS = {
+    "LIVE": "status_live",
+    "SCANNING": "status_scanning",
+    "CONNECTING": "status_connecting",
+    "DISCOVERING": "status_setup",
+    "SETTING UP": "status_setup",
+    "DISCONNECTING": "status_disconnected",
+    "DISCONNECTED": "status_disconnected",
+    "NO DATA": "status_stale",
+    "WAIT": "status_wait",
+    "ERROR": "status_error",
+    "IDLE": "status_idle",
+}
+LANGUAGE_RECT = (98, HEADER_Y + 2, 26, 15)
+# Touch area of the language chip: larger than the chip, up to the nav bar.
+LANGUAGE_TOUCH_RECT = (84, 0, 56, NAV_Y)
+
+
+def draw_language_chip():
+    x, y, width, height = LANGUAGE_RECT
+    g.fill_rect(x, y, width, height, PILL)
+    g.rect(x, y, width, height, CYAN)
+    code = (i18n.language or "--").upper()
+    g.text(x + (width - len(code) * 6) // 2 + 1, y + 4, code, WHITE)
 
 
 def draw_header(state):
     # Also fills the rows hidden by the case so they never show stale pixels.
     g.fill_rect(0, 0, WIDTH, HEADER_Y + 19, DARK)
     g.text(7, HEADER_Y + 5, "MOSTLYLEVEL", WHITE)
+    draw_language_chip()
 
     battery_percent = sensor.power_percent
     g.fill_rect(143, HEADER_Y + 2, 31, 15, DARK)
@@ -153,20 +188,16 @@ def draw_header(state):
     else:
         status_colour = CYAN
 
-    status_label = {
-        "DISCOVERING": "GATT",
-        "SETTING UP": "SETUP",
-        "DISCONNECTED": "NO LINK",
-        "NO DATA": "STALE",
-    }.get(state, state)
+    status_key = STATUS_KEYS.get(state)
+    status_label = t(status_key) if status_key else state
     g.fill_rect(178, HEADER_Y + 6, 7, 7, status_colour)
     g.text(189, HEADER_Y + 5, status_label, status_colour)
 
 
 def draw_navigation():
     buttons = (
-        (4, NAV_Y, 112, "HORIZON", active_screen == 0),
-        (124, NAV_Y, 112, "LEVELLING", active_screen == 1),
+        (4, NAV_Y, 112, t("nav_horizon"), active_screen == 0),
+        (124, NAV_Y, 112, t("nav_levelling"), active_screen == 1),
     )
     for x, y, width, label, selected in buttons:
         fill = PILL if selected else DARK
@@ -222,16 +253,17 @@ def draw_calibrate_button():
             1,
             YELLOW,
         )
+    label = t("calibrate")
     g.text(
-        button_x + (button_width - len("CALIBRATE") * 6) // 2,
+        button_x + (button_width - len(label) * 6) // 2,
         button_y + 5,
-        "CALIBRATE",
+        label,
         BLACK,
     )
 
 
 def draw_corner_view_tabs():
-    tabs = ((12, "2 WEDGES"), (128, "4 CORNERS"))
+    tabs = ((12, t("tab_wedges")), (128, t("tab_corners")))
     for index, (x, label) in enumerate(tabs):
         fill = PILL if index == corner_view else DARK
         edge = CYAN if index == corner_view else GREY
@@ -268,6 +300,13 @@ def corner_lift_heights(values):
 
 
 CORNER_ORDER = ("FRONT LEFT", "FRONT RIGHT", "REAR LEFT", "REAR RIGHT")
+# Text keys of the corner names; CORNER_ORDER names are internal keys.
+CORNER_TEXT_KEYS = {
+    "FRONT LEFT": "front_left",
+    "FRONT RIGHT": "front_right",
+    "REAR LEFT": "rear_left",
+    "REAR RIGHT": "rear_right",
+}
 CORNER_TABS_Y = HORIZON_TOP + 2
 CORNER_CONTENT_TOP = HORIZON_TOP + 20
 # Cell rows keep fixed bottom edges and shrink when the top inset grows.
@@ -285,7 +324,11 @@ LEVEL_CONTENT = "LEVEL"
 
 
 def cm_text(height_cm):
-    return "--.- cm" if height_cm is None else "%.1f cm" % height_cm
+    return local_number("--.- cm" if height_cm is None else "%.1f cm" % height_cm)
+
+
+def corner_text(corner):
+    return t(CORNER_TEXT_KEYS[corner])
 
 
 def corner_page_content(values):
@@ -301,11 +344,13 @@ def corner_page_content(values):
         ranked = sorted(heights.items(), key=lambda item: item[1], reverse=True)
         if ranked[0][1] < NO_WEDGE_NEEDED_THRESHOLD_CM:
             return LEVEL_CONTENT
-        return tuple((label, cm_text(height)) for label, height in ranked[:2])
+        return tuple(
+            (corner_text(corner), cm_text(height)) for corner, height in ranked[:2]
+        )
 
     return tuple(
-        (label, cm_text(None if heights is None else heights[label]))
-        for label in CORNER_ORDER
+        (corner_text(corner), cm_text(None if heights is None else heights[corner]))
+        for corner in CORNER_ORDER
     )
 
 
@@ -341,11 +386,15 @@ def draw_corner_cell(index, label, value, full):
     g.text(value_x, value_y, value, WHITE, scale=2)
 
 
+def draw_centred_text(y, text, colour):
+    g.text((WIDTH - len(text) * 6) // 2, y, text, colour)
+
+
 def draw_corner_content(content):
     if content == LEVEL_CONTENT:
         middle = (WEDGE_TOP + WEDGE_BOTTOM) // 2
-        g.text(69, middle - 21, "NO WEDGES NEEDED", GREEN)
-        g.text(62, middle, "VAN IS LEVEL", WHITE)
+        draw_centred_text(middle - 21, t("no_wedges_needed"), GREEN)
+        draw_centred_text(middle, t("van_is_level"), WHITE)
         return
     for index, (label, value) in enumerate(content):
         draw_corner_cell(index, label, value, True)
@@ -423,8 +472,8 @@ def update_corner_heights(values):
 
 def readout_text(values):
     return (
-        "P " + angle_text(values, "pitch") + "°",
-        "R " + angle_text(values, "roll") + "°",
+        t("pitch_short") + " " + angle_text(values, "pitch") + "°",
+        t("roll_short") + " " + angle_text(values, "roll") + "°",
     )
 
 
@@ -464,11 +513,11 @@ def draw_status_frame(colour):
 def draw_sensor_warning(state, message=None):
     if message is None:
         if state == "NO DATA":
-            message = "SENSOR DATA STALE"
+            message = t("warning_stale")
         elif state in ("DISCONNECTED", "ERROR"):
-            message = "SENSOR DISCONNECTED"
+            message = t("warning_disconnected")
         else:
-            message = "WAITING FOR SENSOR"
+            message = t("warning_waiting")
 
     panel_x = 9
     panel_y = HORIZON_CENTER_Y - 36
@@ -807,6 +856,30 @@ def touch_screen_at(point):
     return None
 
 
+def touch_language_at(point):
+    if point is None:
+        return False
+    x, y = point
+    touch_x, touch_y, touch_width, touch_height = LANGUAGE_TOUCH_RECT
+    return touch_x <= x < touch_x + touch_width and touch_y <= y < touch_y + touch_height
+
+
+def switch_language(values, state):
+    """Show the next language now and remember it across restarts."""
+    code = i18n.next_language()
+    try:
+        i18n.load(code)
+    except (OSError, ValueError) as exc:
+        print("Language %s unavailable:" % code, exc)
+        return
+    try:
+        i18n.save()
+    except OSError as exc:
+        print("Language active until restart; save failed:", exc)
+    layer_cache.clear()  # The CALIBRATE button holds translated text.
+    draw_dashboard(values, state)
+
+
 def touch_calibrate_at(point):
     if point is None or active_screen != 0:
         return False
@@ -904,6 +977,7 @@ def setup():
         print("Touchscreen unavailable:", exc)
 
     pitch_zero, roll_zero = load_level_reference()
+    i18n.start()
     sensor.start()
 
 
@@ -1007,7 +1081,9 @@ def step():
             touch_point = touch.read()
             if touch_point is not None and not touch_was_down:
                 selected_screen = touch_screen_at(touch_point)
-                if touch_calibrate_at(touch_point):
+                if touch_language_at(touch_point):
+                    switch_language(sensor.latest, state)
+                elif touch_calibrate_at(touch_point):
                     if state == "LIVE" and set_level_reference(sensor.latest):
                         display_values, pitch, roll = vehicle_values(sensor.latest)
                         level_frame_active = is_level(pitch, roll)
@@ -1017,7 +1093,7 @@ def step():
                         last_level = level_frame_active
                         last_render_ms = time.ticks_ms()
                     else:
-                        draw_sensor_warning(state, "ZERO NEEDS LIVE SENSOR")
+                        draw_sensor_warning(state, t("warning_calibrate_needs_sensor"))
                 elif selected_screen is not None and selected_screen != active_screen:
                     active_screen = selected_screen
                     draw_dashboard(sensor.latest, state)
