@@ -89,3 +89,62 @@ class FrameBuffer:
                     colour = palette.pixel(colour, 0)
                 if colour != key:
                     self.pixel(target_x, target_y, colour)
+
+    def line(self, x0, y0, x1, y1, colour):
+        dx = abs(x1 - x0)
+        dy = -abs(y1 - y0)
+        sx = 1 if x0 < x1 else -1
+        sy = 1 if y0 < y1 else -1
+        error = dx + dy
+        while True:
+            if 0 <= x0 < self.width and 0 <= y0 < self.height:
+                self.pixel(x0, y0, colour)
+            if x0 == x1 and y0 == y1:
+                return
+            twice = 2 * error
+            if twice >= dy:
+                error += dy
+                x0 += sx
+            if twice <= dx:
+                error += dx
+                y0 += sy
+
+    def ellipse(self, x, y, xr, yr, colour, fill=False):
+        """Filled: pixels inside the ellipse; outline: its edge pixels."""
+        def inside(px, py):
+            return (px * px) * (yr * yr) + (py * py) * (xr * xr) <= (xr * xr) * (yr * yr)
+
+        for py in range(-yr, yr + 1):
+            for px in range(-xr, xr + 1):
+                if not inside(px, py):
+                    continue
+                edge = not all(
+                    inside(px + dx, py + dy) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))
+                )
+                if (fill or edge) and 0 <= x + px < self.width and 0 <= y + py < self.height:
+                    self.pixel(x + px, y + py, colour)
+
+    def poly(self, x, y, coords, colour, fill=False):
+        """MicroPython's scanline fill: integer rows, crossings rounded."""
+        points = [(coords[i], coords[i + 1]) for i in range(0, len(coords), 2)]
+        if not fill:
+            for (x0, y0), (x1, y1) in zip(points, points[1:] + points[:1]):
+                self.line(x + x0, y + y0, x + x1, y + y1, colour)
+            return
+        rows = [py for _, py in points]
+        for row in range(min(rows), max(rows) + 1):
+            nodes = []
+            for (px1, py1), (px2, py2) in zip(points, points[1:] + points[:1]):
+                if py1 != py2 and ((py1 > row >= py2) or (py1 <= row < py2)):
+                    node = 32 * px1 + 32 * (px2 - px1) * (row - py1) / (py2 - py1) + 16
+                    nodes.append(int(node / 32))
+                elif row == max(py1, py2):
+                    if py1 < py2:
+                        self.fill_rect(x + px2, y + py2, 1, 1, colour)
+                    elif py2 < py1:
+                        self.fill_rect(x + px1, y + py1, 1, 1, colour)
+                    else:
+                        self.line(x + px1, y + py1, x + px2, y + py2, colour)
+            nodes.sort()
+            for left, right in zip(nodes[::2], nodes[1::2]):
+                self.fill_rect(x + left, y + row, right - left + 1, 1, colour)
