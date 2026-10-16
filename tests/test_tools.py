@@ -28,7 +28,8 @@ for index, arg in enumerate(args[:-1]):
         shutil.copy(os.environ["FAKE_BMP"], nxt)
 """
 
-COMPILED = {"app", "ble_read", "compositor", "graphics", "ili9341", "screenshot", "touch"}
+COMPILED = {"app", "ble_read", "compositor", "graphics", "i18n", "ili9341", "screenshot", "touch"}
+TEXTS = ["lang_de.json", "lang_en.json", "lang_es.json", "lang_fr.json"]
 
 
 @pytest.fixture
@@ -72,7 +73,7 @@ def build_dir(tmp_path):
 def test_build_bundle(build_dir):
     run_tool("build_mpy.sh", env_extra={"BUILD_DIR": str(build_dir)})
     names = sorted(path.name for path in build_dir.iterdir())
-    assert names == sorted(["main.py", "config.py"] + [name + ".mpy" for name in COMPILED])
+    assert names == sorted(["main.py", "config.py"] + TEXTS + [name + ".mpy" for name in COMPILED])
     assert (build_dir / "main.py").read_bytes() == (ROOT / "src" / "main.py").read_bytes()
     for name in COMPILED:
         header = (build_dir / (name + ".mpy")).read_bytes()[:3]
@@ -124,6 +125,7 @@ def test_deploy_sources(fake_mpremote):
     assert args[:4] == ["connect", "/dev/ttyACM0", "fs", "cp"]
     uploaded = [pathlib.Path(path).name for path in args[4:args.index(":")]]
     assert "ble_scan.py" not in uploaded and "app.py" in uploaded and "main.py" in uploaded
+    assert set(TEXTS) <= set(uploaded)
     (cleanup,) = exec_snippets(args)
     assert "'app.mpy'" in cleanup and "'main.mpy'" not in cleanup
 

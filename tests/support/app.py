@@ -7,6 +7,7 @@ import sys
 SRC = pathlib.Path(__file__).resolve().parents[2] / "src"
 SRC_MODULES = (
     "config",
+    "i18n",
     "graphics",
     "compositor",
     "ili9341",
@@ -33,5 +34,7 @@ def load_app(reference_file):
     """
     app = fresh_import("app")
     app.LEVEL_REFERENCE_FILE = str(reference_file)
+    app.i18n.TEXT_DIR = str(SRC) + "/"
+    app.i18n.LANGUAGE_FILE = str(reference_file.parent / "language.cfg")
     app.setup()
     return app

@@ -4,6 +4,11 @@ Notable project changes are recorded here. This file was introduced with the ini
 
 ## Unreleased
 
+- Screen texts moved to per-language files with German, French, and Spanish translations, switchable at runtime. Tap the new language chip in the header to cycle EN → DE → FR → ES; the choice is saved in `/language.cfg`. Texts are in `src/lang_<code>.json` and loaded by the new `src/i18n.py` (only the active language stays in memory); `LANGUAGES` and `DEFAULT_LANGUAGE` are in `config.py`. Numbers use a decimal comma in German, French, and Spanish. The font gained a comma and accented capitals (Ä Ö Ü À Á É È Ê Í Ó Ú Ñ Ç), drawn as full-height letters with the accent above the line. Other visible changes:
+  - the header status labels are shorter so they fit (`CONNECTING` was cut off; now `LINKING`, and `GATT` became `SETUP`);
+  - the LEVELLING "no wedges needed" message is centred.
+
+  Reference images were regenerated and reviewed, and per-language scenes were added. Deploy and switching were checked on the board; tapping the chip on the device and the translations themselves are not yet reviewed.
 - The BLE client now recovers from stuck links instead of waiting for a reset. `maintain()`, called every main-loop step, disconnects if needed and rescans:
   - after 5 s in ERROR;
   - after 20 s stuck connecting, discovering, setting up, or disconnecting;

@@ -36,6 +36,12 @@ This view ranks the two corners with the largest estimated lift amounts for a tw
 
 The **2 WEDGES** view ranks wheel corners by estimated lift and shows the two largest amounts. The **4 CORNERS** view shows all four estimates. Both use the owner-provided 4,035 mm wheelbase and 1,810/1,790 mm front/rear track widths with live vehicle pitch and roll. The calculation assumes the sensor is mounted level with the chassis at the midpoint of the wheelbase and track, positive pitch means front-high, and positive roll means left-high. These are geometric estimates; after placing wedges, recheck the live readings and adjust as needed. The pitch and roll signs were confirmed on the installed van (2026-10-16); the accuracy of the lift amounts has not been measured.
 
+### Language
+
+Tap the small language chip in the header (**EN**, **DE**, **FR**, **ES**) to switch to the next language; the screen redraws at once and the choice is saved in `/language.cfg` on the ESP32, so it survives restarts. Numbers use a decimal comma in German, French, and Spanish.
+
+The screen texts live in `src/lang_en.json`, `src/lang_de.json`, `src/lang_fr.json`, and `src/lang_es.json`, one key per text, written in uppercase (MicroPython only upper-cases ASCII letters). To change a text, edit the JSON file and deploy. To add a language, copy `lang_en.json` to `lang_<code>.json`, translate it, and add the code to `LANGUAGES` in `src/config.py`. The tests check that every file has every key, that every text fits its space on screen, and that the font has every character; a missing accented letter can be added to `ACCENTED` in `src/graphics.py`. The German, French, and Spanish texts were drafted by Claude and have not been reviewed by native speakers.
+
 ### Set the level reference
 
 On the **HORIZON** screen, after leveling the van with a trusted reference, tap the rounded yellow **CALIBRATE** button in the upper-right corner above the arc. The app records the current pitch and roll as zero offsets in `/level_reference.cfg` on the ESP32 and uses them after restart. Tap **CALIBRATE** again to replace the reference after changing the sensor mount. The button requires live sensor data. Confirm the result on the physical display before relying on it; this calibration flow has not yet been hardware-verified.
@@ -45,7 +51,9 @@ On the **HORIZON** screen, after leveling the van with a trusted reference, tap 
 - `src/main.py` — startup entry point; imports `app` and calls `app.run()`.
 - `src/app.py` — dashboard, render loop (`setup()`, `step()`, `run()`).
 - `src/ili9341.py` — direct SPI display driver.
-- `src/graphics.py` — drawing helpers and bitmap font.
+- `src/graphics.py` — drawing helpers and bitmap font, including accented capitals.
+- `src/i18n.py` — loads the screen texts of the selected language.
+- `src/lang_*.json` — screen texts per language (English, German, French, Spanish).
 - `src/compositor.py` — off-screen strip compositing used for flicker-free HORIZON redraws.
 - `src/screenshot.py` — temporary framebuffer adapter and BMP writer used for screenshots.
 - `src/ble_read.py` — BLE client and packet decoder used by the dashboard; it can also run as a serial diagnostic.

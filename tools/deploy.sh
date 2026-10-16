@@ -83,6 +83,7 @@ elif [[ "$mode" == "source" ]]; then
         files+=("$file")
         [[ "$name" != "main.py" ]] && stale+=("${name%.py}.mpy")
     done
+    files+=("$repo_root"/src/lang_*.json)
     cleanup=(+ exec "$(remove_on_board "${stale[@]}")")
 else
     BUILD_DIR="$build_dir" "$repo_root/tools/build_mpy.sh"

@@ -16,7 +16,7 @@ The full header of `Adafruit_ILI9341.cpp` also reads, in part: "Adafruit invests
 
 ## Adafruit GFX library — 5×7 font
 
-The `FONT` table in `src/graphics.py` is a 5×7 column bitmap font of the kind in Adafruit GFX's classic font, <https://github.com/adafruit/Adafruit-GFX-Library> (`glcdfont.c`). Of the 43 glyphs, 26 are identical to the current `glcdfont.c` (compared on 2026-10-16); the others match variants of the same widely copied 5×7 font, so the exact source is not established. It is attributed to Adafruit as the likely origin. Adafruit GFX's license:
+The `FONT` table in `src/graphics.py` is a 5×7 column bitmap font of the kind in Adafruit GFX's classic font, <https://github.com/adafruit/Adafruit-GFX-Library> (`glcdfont.c`). Of its original 43 glyphs, 26 are identical to the current `glcdfont.c` (compared on 2026-10-16); the others match variants of the same widely copied 5×7 font, so the exact source is not established. It is attributed to Adafruit as the likely origin. The comma and the accented capitals (`ACCENT_MARKS`, `ACCENTED`), added on 2026-10-16, are MostlyLevel's own. Adafruit GFX's license:
 
 ```
 Software License Agreement (BSD License)

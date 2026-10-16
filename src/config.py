@@ -41,6 +41,11 @@ DISPLAY_PITCH_SIGN = 1.0
 DISPLAY_ROLL_SENSOR_KEY = "pitch"
 DISPLAY_ROLL_SIGN = 1.0
 
+# Screen languages, in the order the header chip cycles through them; each
+# needs a lang_<code>.json file. The chosen one is saved in /language.cfg.
+LANGUAGES = ("en", "de", "fr", "es")
+DEFAULT_LANGUAGE = "en"
+
 # Vehicle geometry used for corner lift estimates.
 WHEELBASE_MM = 4035.0
 FRONT_TRACK_MM = 1810.0
