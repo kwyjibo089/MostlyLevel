@@ -9,7 +9,6 @@
   "status_wait": "WARTEN",
   "status_error": "FEHLER",
   "status_idle": "BEREIT",
-  "nav_horizon": "HORIZONT",
   "nav_levelling": "NIVELLIEREN",
   "calibrate": "KALIBRIEREN",
   "tab_wedges": "2 KEILE",
@@ -25,5 +24,8 @@
   "warning_waiting": "WARTE AUF SENSOR",
   "warning_calibrate_needs_sensor": "KALIBRIEREN NUR MIT SENSOR",
   "pitch_short": "P",
-  "roll_short": "R"
+  "roll_short": "R",
+  "nav_attitude": "LAGE",
+  "tab_van": "FAHRZEUG",
+  "tab_horizon": "HORIZONT"
 }

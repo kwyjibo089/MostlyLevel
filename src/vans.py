@@ -104,22 +104,8 @@ def _buffer(van, max_angle):
     return _buffers[key]
 
 
-def draw_tilted(van, angle_deg, max_angle):
-    """Draw `van` tilted by `angle_deg` (clamped to ±max_angle).
-
-    Returns (picture, x, y): a new Bitmap and its top-left corner relative
-    to the point midway between the wheels on the ground.
-    """
-    angle_deg = max(-max_angle, min(max_angle, angle_deg))
-    last = _last.get(id(van))
-    if last is not None and last[0] == angle_deg:
-        # Same tilt: the buffer still holds this picture. Returning the same
-        # object lets the compositor skip strips that did not change.
-        return last[1:]
-    buffer = _buffer(van, max_angle)
-    left, top, width, height = _rotate(van, angle_deg)
-    picture = Bitmap(width, height, COLOURS, buffer=buffer)
-    target = picture.framebuffer
+def _draw_shapes(van, target, left, top):
+    """Fill the rotated shapes into `target`, offset by (left, top)."""
     target.fill(0)
     rotated = van["rotated"]
     points = memoryview(rotated)
@@ -136,12 +122,47 @@ def draw_tilted(van, angle_deg, max_angle):
             )
         else:
             target.poly(-left, -top, points[index:index + 2 * count], value, kind == POLY)
+
+
+def _placed(van, picture, left, top):
+    """(picture, x, y) with x, y relative to the ground point between the wheels."""
     wheel_left, wheel_right = van["wheels"]
     origin_x = (wheel_left + wheel_right) // 2  # Quarter pixels.
-    result = (
+    return (
         picture,
         left - ((origin_x + 2) >> 2),
         top - (van["ground"] >> 2),  # As before: 37.5 px rounds to 37.
     )
+
+
+def draw_tilted(van, angle_deg, max_angle):
+    """Draw `van` tilted by `angle_deg` (clamped to ±max_angle).
+
+    Returns (picture, x, y): a new Bitmap and its top-left corner relative
+    to the point midway between the wheels on the ground.
+    """
+    angle_deg = max(-max_angle, min(max_angle, angle_deg))
+    last = _last.get(id(van))
+    if last is not None and last[0] == angle_deg:
+        # Same tilt: the buffer still holds this picture. Returning the same
+        # object lets the compositor skip strips that did not change.
+        return last[1:]
+    buffer = _buffer(van, max_angle)
+    left, top, width, height = _rotate(van, angle_deg)
+    picture = Bitmap(width, height, COLOURS, buffer=buffer)
+    _draw_shapes(van, picture.framebuffer, left, top)
+    result = _placed(van, picture, left, top)
     _last[id(van)] = (angle_deg,) + result
     return result
+
+
+def picture(van):
+    """Draw `van` upright into a picture of its own, for a fixed symbol.
+
+    Unlike draw_tilted(), the result never shares its pixels with later
+    drawings, so it can be cached. Returns (picture, x, y) like draw_tilted().
+    """
+    left, top, width, height = _rotate(van, 0.0)
+    own = Bitmap(width, height, COLOURS, buffer=bytearray((width + 1) // 2 * height))
+    _draw_shapes(van, own.framebuffer, left, top)
+    return _placed(van, own, left, top)

@@ -8,7 +8,7 @@ from ili9341 import ILI9341
 from graphics import Graphics, BLACK, WHITE, CYAN, YELLOW, GREEN, GREY, RED
 from ble_read import WT901BLEClient
 from touch import TouchInput
-from compositor import DisplayList, StripRenderer
+from compositor import Bitmap, DisplayList, StripRenderer
 import vans
 import i18n
 from i18n import t
@@ -24,6 +24,7 @@ from config import (
     LEVEL_FRAME_RELEASE_THRESHOLD_DEG,
     LEVEL_FRAME_THRESHOLD_DEG,
     LONG_PRESS_MS,
+    PITCH_PIXELS_PER_DEGREE,
     NO_WEDGE_NEEDED_THRESHOLD_CM,
     REAR_TRACK_MM,
     SCREEN_TOP_INSET,
@@ -64,12 +65,14 @@ HORIZON_CENTER_X = WIDTH // 2
 HORIZON_CENTER_Y = (HORIZON_TOP + HORIZON_BOTTOM) // 2
 
 # Fixed HORIZON elements.
-CALIBRATE_RECT = (140, HORIZON_TOP + 10, 88, 18)
+# ATTITUDE has VAN/HORIZON tabs on the top row (like LEVELLING); the
+# CALIBRATE and language buttons sit on the row below.
+CALIBRATE_RECT = (140, HORIZON_TOP + 24, 88, 18)
 # Language button on HORIZON, left of CALIBRATE on the same line. The header
 # is partly hidden by the printed case, so it is not placed there. Its touch
 # area is a little larger than the button.
-LANGUAGE_RECT = (12, HORIZON_TOP + 10, 44, 18)
-LANGUAGE_TOUCH_RECT = (4, HORIZON_TOP + 4, 60, 30)
+LANGUAGE_RECT = (12, HORIZON_TOP + 24, 44, 18)
+LANGUAGE_TOUCH_RECT = (4, HORIZON_TOP + 21, 60, 26)
 CALIBRATE_RADIUS = 5
 READOUT_WIDTH = 108
 READOUT_HEIGHT = 36
@@ -114,6 +117,7 @@ def create_page_renderer():
 
 active_screen = 0
 corner_view = 0
+attitude_view = 0  # ATTITUDE sub-page: 0 = VAN, 1 = HORIZON.
 corner_content = None
 LEVEL_REFERENCE_FILE = "/level_reference.cfg"
 
@@ -189,7 +193,7 @@ def draw_header(state):
 
 def draw_navigation():
     buttons = (
-        (4, NAV_Y, 112, t("nav_horizon"), active_screen == 0),
+        (4, NAV_Y, 112, t("nav_attitude"), active_screen == 0),
         (124, NAV_Y, 112, t("nav_levelling"), active_screen == 1),
     )
     for x, y, width, label, selected in buttons:
@@ -288,14 +292,18 @@ def draw_language_button():
     draw_rounded_button(LANGUAGE_RECT, CYAN, (i18n.language or "--").upper())
 
 
-def draw_corner_view_tabs():
-    tabs = ((12, t("tab_wedges")), (128, t("tab_corners")))
-    for index, (x, label) in enumerate(tabs):
-        fill = PILL if index == corner_view else DARK
-        edge = CYAN if index == corner_view else GREY
+def draw_view_tabs(labels, selected):
+    """The two sub-page tabs at the top of ATTITUDE and LEVELLING."""
+    for index, (x, label) in enumerate(zip((12, 128), labels)):
+        fill = PILL if index == selected else DARK
+        edge = CYAN if index == selected else GREY
         g.fill_rect(x, CORNER_TABS_Y, 100, NAV_HEIGHT, fill)
         g.rect(x, CORNER_TABS_Y, 100, NAV_HEIGHT, edge)
         g.text(x + (100 - len(label) * 6) // 2, CORNER_TABS_Y + 5, label, WHITE)
+
+
+def draw_corner_view_tabs():
+    draw_view_tabs((t("tab_wedges"), t("tab_corners")), corner_view)
 
 
 def corner_lift_heights(values):
@@ -559,9 +567,222 @@ def draw_sensor_warning(state, message=None):
         page_renderer.invalidate()
 
 
+def horizon_geometry(pitch_deg, roll_deg):
+    """Return the clamped pitch and roll slope used to draw the horizon."""
+    pitch_deg = clamp(pitch_deg, -35.0, 35.0)
+    roll_deg = clamp(roll_deg, -45.0, 45.0)
+    return pitch_deg, math.tan(math.radians(roll_deg))
+
+
+def horizon_y(x, pitch_deg, roll_slope):
+    y = int(
+        HORIZON_CENTER_Y
+        + pitch_deg * PITCH_PIXELS_PER_DEGREE
+        + roll_slope * (x - HORIZON_CENTER_X)
+    )
+    return clamp(y, HORIZON_TOP, HORIZON_BOTTOM)
+
+
+# Pitch arc geometry: an upper half-ring between two ellipses.
+ARC_RADIUS_X = 105
+ARC_RADIUS_Y = 90
+ARC_THICKNESS = 2
+
+
+def arc_ring_rects(cx, baseline, rx, ry, thickness):
+    """Return row runs of the half-ring between ellipses (rx, ry) and
+    (rx - thickness, ry - thickness), so its width is the same everywhere.
+
+    A pixel belongs to the ring when its centre lies between the two.
+    """
+    rects = []
+    inner_rx = rx - thickness
+    inner_ry = ry - thickness
+    for y in range(baseline - ry, baseline):
+        dy = baseline - (y + 0.5)
+        if dy >= ry:
+            continue
+        outer = rx * math.sqrt(1.0 - (dy / ry) ** 2)
+        inner = inner_rx * math.sqrt(1.0 - (dy / inner_ry) ** 2) if dy < inner_ry else 0.0
+        left = math.ceil(cx - outer - 0.5)
+        right = math.floor(cx + outer - 0.5)
+        if inner <= 0.5:
+            rects.append((left, y, right - left + 1, 1))
+            continue
+        left_end = math.floor(cx - inner - 0.5)
+        right_start = math.ceil(cx + inner - 0.5)
+        if left_end >= left:
+            rects.append((left, y, left_end - left + 1, 1))
+        if right >= right_start:
+            rects.append((right_start, y, right - right_start + 1, 1))
+    return rects
+
+
+def arc_point(cx, baseline, x):
+    """Return the outer-ellipse point above `x` and its outward unit normal."""
+    rx, ry = ARC_RADIUS_X, ARC_RADIUS_Y
+    dx = clamp(x - cx, -rx, rx)
+    dy = ry * math.sqrt(max(0.0, 1.0 - (dx / rx) ** 2))
+    nx, ny = dx / (rx * rx), -dy / (ry * ry)
+    length = math.sqrt(nx * nx + ny * ny) or 1.0
+    return cx + dx, baseline - dy, nx / length, ny / length
+
+
+def tick_rects(px, py, nx, ny, inside, outside):
+    """Rasterise a 2-pixel-wide tick along the normal (nx, ny) into row runs."""
+    pixels = set()
+    steps = int((inside + outside) * 4) + 1
+    for index in range(steps):
+        along = -inside + index / 4.0
+        for across in (-0.5, 0.5):
+            x = px + nx * along - ny * across
+            y = py + ny * along + nx * across
+            pixels.add((int(math.floor(x)), int(math.floor(y))))
+    rects = []
+    for y in sorted({y for _, y in pixels}):
+        xs = sorted(x for x, row in pixels if row == y)
+        start = previous = xs[0]
+        for x in xs[1:] + [None]:
+            if x is not None and x == previous + 1:
+                previous = x
+                continue
+            rects.append((start, y, previous - start + 1, 1))
+            if x is not None:
+                start = previous = x
+    return rects
+
+
+def draw_pitch_arc():
+    """Draw the fixed curved attitude scale above the moving horizon."""
+    cx = HORIZON_CENTER_X
+    baseline = HORIZON_CENTER_Y + 10
+    for x, y, width, height in arc_ring_rects(
+        cx, baseline, ARC_RADIUS_X, ARC_RADIUS_Y, ARC_THICKNESS
+    ):
+        g.fill_rect(x, y, width, height, WHITE)
+
+    for degree in range(-40, 41, 5):
+        px, py, nx, ny = arc_point(cx, baseline, cx + ARC_RADIUS_X * degree / 40.0)
+        major = degree % 10 == 0
+        # Ticks point at the centre, from the ring's inner edge outward.
+        for x, y, width, height in tick_rects(
+            px, py, nx, ny, ARC_THICKNESS, 5 if major else 2
+        ):
+            g.fill_rect(x, y, width, height, WHITE)
+        if major and abs(degree) < 40:
+            # Labels sit outside the ring along the same direction; the
+            # ends (±40) are left unlabelled where the arc meets the horizon.
+            label = str(degree)
+            lx = px + nx * 12
+            ly = py + ny * 12
+            g.text(int(lx - len(label) * 3 + 0.5), int(ly - 3.5 + 0.5), label, WHITE)
+
+
+def draw_ladder(pitch_deg, roll_deg):
+    pitch_offset = pitch_deg * PITCH_PIXELS_PER_DEGREE
+    roll_slope = math.tan(math.radians(roll_deg))
+
+    for mark in (20, 10, -10, -20):
+        base_y = HORIZON_CENTER_Y + pitch_offset - mark * 1.35
+        if base_y < HORIZON_TOP + 3 or base_y > HORIZON_BOTTOM - 3:
+            continue
+
+        for start_x, end_x in ((73, 103), (137, 167)):
+            run_start = None
+            run_y = None
+            for x in range(start_x, end_x, 3):
+                y = int(base_y + roll_slope * (x - HORIZON_CENTER_X))
+                if HORIZON_TOP < y < HORIZON_BOTTOM and y == run_y:
+                    continue
+                if run_start is not None:
+                    g.fill_rect(run_start, run_y, x - run_start, 2, WHITE)
+                if HORIZON_TOP < y < HORIZON_BOTTOM:
+                    run_start = x
+                    run_y = y
+                else:
+                    run_start = None
+                    run_y = None
+            if run_start is not None:
+                g.fill_rect(run_start, run_y, end_x - run_start, 2, WHITE)
+
+        label = "%+d" % mark
+        label_y = int(base_y - 3)
+        g.text(43, label_y, label, WHITE)
+        g.text(177, label_y, label, WHITE)
+
+
+def draw_van_rear(center_y):
+    """The fixed van symbol: the van seen from behind, above the marker."""
+    picture, x, y = vans.picture(vans.REAR)
+    g.bitmap(HORIZON_CENTER_X + x, center_y + 6 + y, picture)
+
+    marker_y = int(center_y + 12)
+    for row in range(6):
+        half_width = row + 1
+        g.fill_rect(
+            HORIZON_CENTER_X - half_width,
+            marker_y + row,
+            half_width * 2 + 1,
+            1,
+            YELLOW,
+        )
+
+
+def draw_horizon(pitch_deg, roll_deg):
+    roll_deg = clamp(roll_deg, -45.0, 45.0)
+    pitch_deg, roll_slope = horizon_geometry(pitch_deg, roll_deg)
+
+    # Group adjacent strips with the same boundary height. Near level, this
+    # replaces dozens of tiny SPI windows with only a few wide rectangles.
+    run_x = 0
+    run_y = horizon_y(2, pitch_deg, roll_slope)
+    for x in range(4, WIDTH + 1, 4):
+        next_y = (
+            horizon_y(x + 2, pitch_deg, roll_slope)
+            if x < WIDTH
+            else None
+        )
+        if next_y == run_y:
+            continue
+
+        run_width = x - run_x
+        g.fill_rect(run_x, HORIZON_TOP, run_width, run_y - HORIZON_TOP, SKY)
+        g.fill_rect(
+            run_x,
+            run_y,
+            run_width,
+            HORIZON_BOTTOM - run_y + 1,
+            GROUND,
+        )
+        if next_y is not None:
+            run_x = x
+            run_y = next_y
+
+    # Merge adjacent horizontal horizon segments that share the same row.
+    run_x = 0
+    run_y = horizon_y(2, pitch_deg, roll_slope)
+    for x in range(4, WIDTH + 1, 4):
+        next_y = (
+            horizon_y(x + 2, pitch_deg, roll_slope)
+            if x < WIDTH
+            else None
+        )
+        if next_y == run_y:
+            continue
+        g.fill_rect(run_x, run_y, x - run_x, 1, WHITE)
+        if next_y is not None:
+            run_x = x
+            run_y = next_y
+
+    draw_cached("arc", draw_pitch_arc, bitmap=True)
+    draw_ladder(pitch_deg, roll_deg)
+    draw_cached("van_rear", draw_van_rear, HORIZON_CENTER_Y)
+
+
+
 # The attitude scenes: the van from behind tilts with roll, the van from
 # the right tilts with pitch, each standing on fixed, level ground.
-REAR_GROUND_Y = HORIZON_TOP + 102
+REAR_GROUND_Y = HORIZON_TOP + 112
 SIDE_GROUND_Y = HEIGHT - READOUT_HEIGHT - 22
 GROUND_DEPTH = 8
 
@@ -616,11 +837,59 @@ def compositing():
 layer_cache = {}
 
 
-def draw_cached(key, draw, *args):
-    """Draw a fixed layer, recording its rects only the first time."""
+# Tile size for bitmap layers: thin shapes like the arc leave most tiles
+# empty, and a small blit area keeps compositing fast.
+LAYER_TILE_WIDTH = 24
+LAYER_TILE_HEIGHT = 12
+
+
+def layer_bitmaps(items):
+    """Turn a layer's rects into Bitmap items, one per non-empty tile.
+
+    Each tile is trimmed to its content, so a thin arc needs only a few
+    thousand pixels of blitting instead of its whole bounding box.
+    """
+    tiles = {}
+    for x, y, w, h, colour in items:
+        for tile_y in range(y // LAYER_TILE_HEIGHT, (y + h - 1) // LAYER_TILE_HEIGHT + 1):
+            top = max(y, tile_y * LAYER_TILE_HEIGHT)
+            bottom = min(y + h, (tile_y + 1) * LAYER_TILE_HEIGHT)
+            for tile_x in range(x // LAYER_TILE_WIDTH, (x + w - 1) // LAYER_TILE_WIDTH + 1):
+                left = max(x, tile_x * LAYER_TILE_WIDTH)
+                right = min(x + w, (tile_x + 1) * LAYER_TILE_WIDTH)
+                tiles.setdefault((tile_y, tile_x), []).append(
+                    (left, top, right - left, bottom - top, colour)
+                )
+    result = []
+    for key in sorted(tiles):
+        rects = tiles[key]
+        left = min(rect[0] for rect in rects)
+        top = min(rect[1] for rect in rects)
+        right = max(rect[0] + rect[2] for rect in rects)
+        bottom = max(rect[1] + rect[3] for rect in rects)
+        colours = [None]
+        for rect in rects:
+            if rect[4] not in colours:
+                colours.append(rect[4])
+        picture = Bitmap(right - left, bottom - top, colours)
+        for x, y, w, h, colour in rects:
+            picture.fill_rect(x - left, y - top, w, h, colour)
+        result.append((left, top, picture.width, picture.height, picture))
+    return result
+
+
+
+
+def draw_cached(key, draw, *args, bitmap=False):
+    """Draw a fixed layer, recording it only the first time.
+
+    With bitmap=True the layer is kept as tiled Bitmaps, which the
+    compositor copies in with one blit each instead of hundreds of rects.
+    """
     items = layer_cache.get(key)
     if items is None:
-        items = layer_cache[key] = tuple(record_items(draw, *args))
+        items = record_items(draw, *args)
+        items = layer_cache[key] = tuple(layer_bitmaps(items) if bitmap else items)
 
     if isinstance(g.lcd, DisplayList):
         g.lcd.items.extend(items)
@@ -629,8 +898,18 @@ def draw_cached(key, draw, *args):
             g.item(item)
 
 
+def draw_attitude_tabs():
+    draw_view_tabs((t("tab_van"), t("tab_horizon")), attitude_view)
+
+
 def draw_horizon_layers(pitch, roll, display_values, level):
-    draw_attitude(pitch, roll)
+    """Draw the ATTITUDE page below the navigation bar."""
+    if attitude_view == 0:
+        draw_attitude(pitch, roll)
+    else:
+        draw_horizon(pitch, roll)
+    # The tabs change only with the sub-page or language; record them once.
+    draw_cached("tabs%d" % attitude_view, draw_attitude_tabs)
     draw_cached("calibrate", draw_calibrate_button)
     draw_cached("language", draw_language_button)
     draw_hold_progress()
@@ -887,7 +1166,8 @@ def step():
     """Run one pass of the main loop: status, redraws, and touch input."""
     global last_battery_request_ms, last_battery_percent, last_state
     global last_attitude, last_level, last_render_ms, screen_initialized
-    global level_frame_active, active_screen, corner_view, touch, touch_was_down
+    global level_frame_active, active_screen, corner_view, attitude_view, touch
+    global touch_was_down
 
     sensor.maintain()
     if sensor.failed_recoveries >= SENSOR_RECOVERY_RESET_COUNT:
@@ -995,6 +1275,11 @@ def step():
                     selected_view = touch_corner_view_at(touch_point)
                     if selected_view is not None and selected_view != corner_view:
                         corner_view = selected_view
+                        draw_dashboard(sensor.latest, state)
+                else:
+                    selected_view = touch_corner_view_at(touch_point)
+                    if selected_view is not None and selected_view != attitude_view:
+                        attitude_view = selected_view
                         draw_dashboard(sensor.latest, state)
             touch_was_down = touch_point is not None
         except Exception as exc:

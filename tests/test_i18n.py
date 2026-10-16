@@ -153,4 +153,4 @@ def test_language_touch_area_stays_clear_of_calibrate(app):
     # The visible button lies inside its touch area, below the navigation bar.
     x, y, width, height = app.LANGUAGE_RECT
     assert tx <= x and x + width <= tx + tw and ty <= y and y + height <= ty + th
-    assert ty >= app.HORIZON_TOP
+    assert ty >= app.CORNER_TABS_Y + app.NAV_HEIGHT  # Below the VAN/HORIZON tabs.

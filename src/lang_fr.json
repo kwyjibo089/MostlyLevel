@@ -9,7 +9,6 @@
   "status_wait": "ATTENTE",
   "status_error": "ERREUR",
   "status_idle": "PRÊT",
-  "nav_horizon": "HORIZON",
   "nav_levelling": "NIVELLEMENT",
   "calibrate": "CALIBRER",
   "tab_wedges": "2 CALES",
@@ -25,5 +24,8 @@
   "warning_waiting": "EN ATTENTE DU CAPTEUR",
   "warning_calibrate_needs_sensor": "CALIBRAGE: CAPTEUR REQUIS",
   "pitch_short": "P",
-  "roll_short": "R"
+  "roll_short": "R",
+  "nav_attitude": "ASSIETTE",
+  "tab_van": "FOURGON",
+  "tab_horizon": "HORIZON"
 }

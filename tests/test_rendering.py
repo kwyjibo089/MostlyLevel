@@ -38,8 +38,10 @@ def below_header(pixels, app):
     "pitch, roll, level",
     [(0.0, 0.0, True), (3.0, -2.0, False), (-20.0, 30.0, False), (50.0, -60.0, False)],
 )
-def test_composited_page_matches_direct_drawing(app, panel, pitch, roll, level):
+@pytest.mark.parametrize("attitude_view", [0, 1], ids=["van", "horizon"])
+def test_composited_page_matches_direct_drawing(app, panel, pitch, roll, level, attitude_view):
     app.active_screen = 0
+    app.attitude_view = attitude_view
     app.level_frame_active = level
     values = sensor_values(pitch, roll)
     app.draw_dashboard(values, "LIVE")
@@ -59,8 +61,10 @@ def random_walk(seed, steps):
 
 
 @pytest.mark.parametrize("seed", [1, 2])
-def test_live_horizon_updates_match_full_redraw(app, panel, seed):
+@pytest.mark.parametrize("attitude_view", [0, 1], ids=["van", "horizon"])
+def test_live_horizon_updates_match_full_redraw(app, panel, seed, attitude_view):
     app.active_screen = 0
+    app.attitude_view = attitude_view
     app.level_frame_active = False
     app.draw_dashboard(sensor_values(0.0, 0.0), "LIVE")
     for pitch, roll in random_walk(seed, 40):
@@ -73,8 +77,10 @@ def test_live_horizon_updates_match_full_redraw(app, panel, seed):
         assert below_header(snapshot(panel), app) == below_header(reference, app), (pitch, roll)
 
 
-def test_unchanged_horizon_sends_no_pixels(app, panel):
+@pytest.mark.parametrize("attitude_view", [0, 1], ids=["van", "horizon"])
+def test_unchanged_horizon_sends_no_pixels(app, panel, attitude_view):
     app.active_screen = 0
+    app.attitude_view = attitude_view
     values = sensor_values(1.0, 2.0)
     app.draw_dashboard(values, "LIVE")
     display, pitch, roll = app.vehicle_values(values)
@@ -83,8 +89,10 @@ def test_unchanged_horizon_sends_no_pixels(app, panel):
     assert panel.pixel_bytes == 0
 
 
-def test_horizon_repaints_after_warning_overlay(app, panel):
+@pytest.mark.parametrize("attitude_view", [0, 1], ids=["van", "horizon"])
+def test_horizon_repaints_after_warning_overlay(app, panel, attitude_view):
     app.active_screen = 0
+    app.attitude_view = attitude_view
     values = sensor_values(1.0, 2.0)
     app.draw_dashboard(values, "LIVE")
     app.draw_sensor_warning("NO DATA")
@@ -184,7 +192,7 @@ def test_cached_layers_match_fresh_drawing(app):
 
     app.layer_cache.clear()
     first = app.horizon_page_items(3.0, -2.0, {"pitch": 3.0, "roll": -2.0}, True)
-    assert set(app.layer_cache) == {"calibrate", "language", "level"}
+    assert set(app.layer_cache) == {"tabs0", "calibrate", "language", "level"}
     assert list(app.layer_cache["calibrate"]) == fresh(app.draw_calibrate_button)
     assert list(app.layer_cache["level"]) == fresh(app.draw_level_frame)
 
