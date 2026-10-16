@@ -167,11 +167,32 @@ def test_cached_layers_match_fresh_drawing(app):
             app.g = saved
         return recorder.items
 
+    def painted(items):
+        """Pixel -> colour after drawing `items` in order."""
+        pixels = {}
+        for x, y, w, h, colour in items:
+            if not isinstance(colour, int):
+                for rx, ry, rw, rh, rc in colour.rects():
+                    for px in range(x + rx, x + rx + rw):
+                        for py in range(y + ry, y + ry + rh):
+                            pixels[(px, py)] = rc
+                continue
+            for px in range(x, x + w):
+                for py in range(y, y + h):
+                    pixels[(px, py)] = colour
+        return pixels
+
     app.layer_cache.clear()
     first = app.horizon_page_items(3.0, -2.0, {"pitch": 3.0, "roll": -2.0}, True)
     assert set(app.layer_cache) == {"arc", "van", "calibrate", "language", "level"}
-    assert list(app.layer_cache["arc"]) == fresh(app.draw_pitch_arc)
-    assert list(app.layer_cache["van"]) == fresh(app.draw_van_side, app.HORIZON_CENTER_Y)
+    # The arc is kept as tiled Bitmaps and the van as a Bitmap plus the
+    # marker rects; both paint the same pixels as drawing them afresh.
+    arc = app.layer_cache["arc"]
+    assert len(arc) > 1 and all(not isinstance(item[4], int) for item in arc)
+    assert painted(arc) == painted(app.record_items(app.draw_pitch_arc))
+    van = app.layer_cache["van"]
+    assert not isinstance(van[0][4], int)
+    assert painted(van) == painted(fresh(app.draw_van_side, app.HORIZON_CENTER_Y))
     assert list(app.layer_cache["calibrate"]) == fresh(app.draw_calibrate_button)
     assert list(app.layer_cache["level"]) == fresh(app.draw_level_frame)
 

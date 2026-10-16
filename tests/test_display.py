@@ -123,3 +123,55 @@ def test_strip_renderer_handles_partial_last_strip(compositor, lcd, panel):
     renderer.render([(0, 300, 240, 20, 0x07E0)])
     assert panel.pixel(239, 319) == 0x07E0
     assert panel.pixel(0, 299) == 0
+
+
+def picture(compositor):
+    """A 4x3 two-colour Bitmap: a red top row and a white dot, rest clear."""
+    bitmap = compositor.Bitmap(4, 3, [None, 0xF800, 0xFFFF])
+    bitmap.fill_rect(0, 0, 4, 1, 0xF800)
+    bitmap.fill_rect(2, 2, 1, 1, 0xFFFF)
+    return bitmap
+
+
+def test_bitmap_composites_with_transparency(compositor, lcd, panel):
+    renderer = compositor.StripRenderer(lcd, 40, 320, 40)
+    bitmap = picture(compositor)
+    renderer.render([(0, 40, 240, 280, 0x249F), (10, 78, 4, 3, bitmap)])  # Spans 2 strips.
+    assert region(panel, 10, 78, 4, 3) == [
+        0xF800, 0xF800, 0xF800, 0xF800,
+        0x249F, 0x249F, 0x249F, 0x249F,  # Transparent: the sky shows.
+        0x249F, 0x249F, 0xFFFF, 0x249F,
+    ]
+
+
+def test_bitmap_in_render_area_and_rects(compositor, lcd, panel):
+    renderer = compositor.StripRenderer(lcd, 40, 320, 40)
+    bitmap = picture(compositor)
+    renderer.render_area(10, 50, 6, 4, [(10, 50, 6, 4, 0x07E0), (11, 50, 4, 3, bitmap)])
+    assert panel.pixel(11, 50) == 0xF800 and panel.pixel(11, 51) == 0x07E0
+    assert bitmap.rects() == [(0, 0, 4, 1, 0xF800), (2, 2, 1, 1, 0xFFFF)]
+
+
+def test_bitmap_on_targets_without_blit(compositor, graphics, panel):
+    graphics.fill_rect(0, 0, 10, 10, 0x001F)
+    graphics.bitmap(2, 2, picture(compositor))
+    assert region(panel, 2, 2, 4, 3) == [
+        0xF800, 0xF800, 0xF800, 0xF800,
+        0x001F, 0x001F, 0x001F, 0x001F,
+        0x001F, 0x001F, 0xFFFF, 0x001F,
+    ]
+
+
+def test_bitmap_in_screenshot_tiles(compositor, import_fresh):
+    screenshot = import_fresh("screenshot")
+    tile = screenshot.TileFramebufferDisplay(8, 2, 10)
+    tile.fill(0x001F)
+    import compositor as module
+
+    bitmap = module.Bitmap(4, 3, [None, 0xF800, 0xFFFF])
+    bitmap.fill_rect(0, 0, 4, 1, 0xF800)
+    tile.bitmap(1, 9, bitmap)  # Rows 9-11; the tile holds rows 10-11.
+    assert tile.framebuffer.pixel(1, 0) == 0x001F  # Row 10 is transparent.
+    bitmap.fill_rect(0, 1, 1, 1, 0xFFFF)
+    tile.bitmap(1, 9, bitmap)
+    assert tile.framebuffer.pixel(1, 0) == 0xFFFF  # Native byte order.

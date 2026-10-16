@@ -9,11 +9,105 @@ with its final colour. Strips whose rectangles did not change are skipped.
 import framebuf
 
 
+def swap_bytes(colour):
+    """framebuf stores RGB565 little-endian; the ILI9341 wants high byte first."""
+    return ((colour & 0xFF) << 8) | (colour >> 8)
+
+
+# Shared (palette, transparent key) per colour list and byte order.
+PALETTES = {}
+
+
+class Bitmap:
+    """A fixed picture with transparent pixels, drawn with one framebuf.blit.
+
+    Pixels hold indices into `colours` (RGB565); index 0 is transparent. Up
+    to 2 colours use 1 bit per pixel (MONO_HLSB), up to 16 use 4 (GS4_HMSB).
+    A display-list item whose colour is a Bitmap stands for the whole picture
+    at that position, instead of many small rects.
+    """
+
+    def __init__(self, width, height, colours, pixels=None):
+        """`pixels`, if given, are packed MONO_HLSB or GS4_HMSB rows."""
+        if len(colours) > 16:
+            raise ValueError("a Bitmap holds at most 15 colours")
+        self.width = width
+        self.height = height
+        self.colours = colours
+        if len(colours) <= 2:
+            fmt = framebuf.MONO_HLSB
+            size = (width + 7) // 8 * height
+        else:
+            fmt = framebuf.GS4_HMSB
+            size = (width + 1) // 2 * height
+        data = bytearray(size) if pixels is None else bytearray(pixels)
+        self.framebuffer = framebuf.FrameBuffer(data, width, height, fmt)
+        self.rect_cache = None
+        # The shared palettes, looked up on first use (per byte order).
+        self.swapped_palette = None
+        self.native_palette = None
+
+    def fill_rect(self, x, y, w, h, colour):
+        self.framebuffer.fill_rect(x, y, w, h, self.colours.index(colour))
+
+    def palette(self, swapped):
+        """Return (palette, key) for blitting onto a buffer of that byte order.
+
+        Bitmaps with the same colours share one palette, which matters for
+        layers split into many tiles.
+        """
+        cache_key = (tuple(self.colours), swapped)
+        if cache_key not in PALETTES:
+            values = [swap_bytes(c) if swapped else c for c in self.colours[1:]]
+            key = 1
+            while key in values:
+                key += 1
+            count = len(self.colours)
+            palette = framebuf.FrameBuffer(bytearray(count * 2), count, 1, framebuf.RGB565)
+            palette.pixel(0, 0, key)
+            for index, value in enumerate(values):
+                palette.pixel(index + 1, 0, value)
+            PALETTES[cache_key] = (palette, key)
+        return PALETTES[cache_key]
+
+    def blit_into(self, target, x, y, swapped):
+        if swapped:
+            if self.swapped_palette is None:
+                self.swapped_palette = self.palette(True)
+            palette, key = self.swapped_palette
+        else:
+            if self.native_palette is None:
+                self.native_palette = self.palette(False)
+            palette, key = self.native_palette
+        target.blit(self.framebuffer, x, y, key, palette)
+
+    def rects(self):
+        """Return the picture as (x, y, w, 1, colour) row runs; for targets
+        without framebuf.blit. Worked out once, on first use."""
+        if self.rect_cache is None:
+            rects = []
+            pixel = self.framebuffer.pixel
+            for y in range(self.height):
+                x = 0
+                while x < self.width:
+                    index = pixel(x, y)
+                    start = x
+                    while x < self.width and pixel(x, y) == index:
+                        x += 1
+                    if index:
+                        rects.append((start, y, x - start, 1, self.colours[index]))
+            self.rect_cache = rects
+        return self.rect_cache
+
+
 class DisplayList:
     """LCD stand-in for Graphics that records (x, y, w, h, colour) fills."""
 
     def __init__(self):
         self.items = []
+
+    def bitmap(self, x, y, picture):
+        self.items.append((x, y, picture.width, picture.height, picture))
 
     def fill_rect(self, x, y, w, h, colour):
         if w > 0 and h > 0:
@@ -87,15 +181,18 @@ class StripRenderer:
             strip_rows = min(rows, self.bottom - strip_top)
             framebuffer.fill(0)
             for x, y, w, h, colour in bucket:
-                # framebuf stores RGB565 little-endian; the ILI9341 expects
-                # the high byte first, so swap the bytes when drawing.
-                framebuffer.fill_rect(
-                    x,
-                    y - strip_top,
-                    w,
-                    h,
-                    ((colour & 0xFF) << 8) | (colour >> 8),
-                )
+                if isinstance(colour, int):
+                    # framebuf stores RGB565 little-endian; the ILI9341
+                    # expects the high byte first, so swap when drawing.
+                    framebuffer.fill_rect(
+                        x,
+                        y - strip_top,
+                        w,
+                        h,
+                        ((colour & 0xFF) << 8) | (colour >> 8),
+                    )
+                else:
+                    colour.blit_into(framebuffer, x, y - strip_top, True)
             self.lcd.blit(
                 0,
                 strip_top,
@@ -114,13 +211,16 @@ class StripRenderer:
         framebuffer = framebuf.FrameBuffer(self.buffer, w, h, framebuf.RGB565)
         framebuffer.fill(0)
         for item_x, item_y, item_w, item_h, colour in items:
-            framebuffer.fill_rect(
-                item_x - x,
-                item_y - y,
-                item_w,
-                item_h,
-                ((colour & 0xFF) << 8) | (colour >> 8),
-            )
+            if isinstance(colour, int):
+                framebuffer.fill_rect(
+                    item_x - x,
+                    item_y - y,
+                    item_w,
+                    item_h,
+                    ((colour & 0xFF) << 8) | (colour >> 8),
+                )
+            else:
+                colour.blit_into(framebuffer, item_x - x, item_y - y, True)
         self.lcd.blit(x, y, w, h, self.view[:w * h * 2])
         first = max(0, (y - self.top) // self.rows)
         last = min(self.count - 1, (y + h - 1 - self.top) // self.rows)

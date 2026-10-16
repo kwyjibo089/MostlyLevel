@@ -28,7 +28,10 @@ for index, arg in enumerate(args[:-1]):
         shutil.copy(os.environ["FAKE_BMP"], nxt)
 """
 
-COMPILED = {"app", "ble_read", "compositor", "graphics", "i18n", "ili9341", "screenshot", "touch"}
+COMPILED = {
+    "app", "ble_read", "compositor", "graphics", "i18n", "ili9341", "screenshot", "touch",
+    "van_sprite",
+}
 TEXTS = ["lang_de.json", "lang_en.json", "lang_es.json", "lang_fr.json"]
 
 
@@ -188,3 +191,10 @@ def test_screenshot_rejects_paths(fake_mpremote):
     result = run_tool("screenshot.sh", "../evil", fake=fake_mpremote, check=False)
     assert result.returncode == 2
     assert not fake_mpremote[1].exists()
+
+
+def test_van_sprite_is_up_to_date():
+    result = subprocess.run(
+        [sys.executable, str(TOOLS / "make_van.py"), "--check"], capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr

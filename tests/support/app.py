@@ -10,6 +10,7 @@ SRC_MODULES = (
     "i18n",
     "graphics",
     "compositor",
+    "van_sprite",
     "ili9341",
     "ble_read",
     "touch",

@@ -4,6 +4,11 @@ Notable project changes are recorded here. This file was introduced with the ini
 
 ## Unreleased
 
+- Nicer HORIZON graphics:
+  - the pitch arc is a smooth ring of constant width, with ticks pointing at the centre and labels following the curve (no labels at the ±40 ends);
+  - the camper is redrawn from shapes: rounded body, sloped windscreen, round wheels with rims, wheel arches, and a clean outline (`tools/make_van.py` generates `src/van_sprite.py`).
+
+  Both are kept as small bitmaps that the compositor copies in with `framebuf.blit` (new `compositor.Bitmap`; the screenshot and direct-drawing paths support them too), so redraw speed is about unchanged and free memory about 4 KB lower. A 6-minute stress run on the board stayed stable. Reference images regenerated and reviewed.
 - German numbers use a decimal point instead of a comma (owner choice, Swiss convention).
 - CALIBRATE and the language button now need a press of about one second (`LONG_PRESS_MS` in `config.py`); a bar along the button fills while holding, and releasing or sliding off cancels. A stray touch can no longer overwrite the level reference or switch the language. Checked on the board with a simulated touch; not yet with a finger.
 - Pitch and roll readouts use P and R in every language (owner choice), instead of L/Q (German), T/R (French), and L/T (Spanish).
