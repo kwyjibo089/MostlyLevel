@@ -783,7 +783,11 @@ def draw_van_rear(center_y):
 
 
 def draw_horizon(pitch_deg, roll_deg):
-    roll_deg = clamp(roll_deg, -45.0, 45.0)
+    # Aircraft attitude-indicator convention, as seen from the driver's seat:
+    # positive roll (left side high) banks the van to the right, so the
+    # horizon rises on the right. Positive pitch (front up) already moves the
+    # horizon down. The sign flip here also turns the ladder.
+    roll_deg = -clamp(roll_deg, -45.0, 45.0)
     pitch_deg, roll_slope = horizon_geometry(pitch_deg, roll_deg)
 
     # Group adjacent strips with the same boundary height. Near level, this

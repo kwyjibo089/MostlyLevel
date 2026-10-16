@@ -1,6 +1,7 @@
 """Rendering invariants: the optimised redraw paths must produce exactly the
 pixels a full, direct redraw would."""
 
+import math
 import random
 from array import array
 
@@ -271,3 +272,18 @@ def test_page_and_tab_switches_do_not_clear_the_screen(app_with_touch, fake_cloc
         assert snapshot(panel) == full_direct_redraw(app, panel, app.sensor.latest), point
         clears.clear()
     assert app.active_screen == 0
+
+
+def test_horizon_roll_follows_the_aircraft_convention(app, panel):
+    """Left side high (positive roll): the horizon rises on the right."""
+    app.active_screen = 0
+    app.attitude_view = 1
+    roll = 10.0
+    app.draw_dashboard(sensor_values(0.0, roll), "LIVE")
+    left = app.horizon_y(20, 0.0, math.tan(math.radians(-roll)))
+    right = app.horizon_y(220, 0.0, math.tan(math.radians(-roll)))
+    assert right < left
+    # On screen: sky just above the horizon on the right, ground on the left.
+    assert panel.pixel(220, right - 3) == app.SKY
+    assert panel.pixel(20, left + 3) == app.GROUND
+    assert panel.pixel(220, left - 3) == app.GROUND  # Right side is already ground there.
