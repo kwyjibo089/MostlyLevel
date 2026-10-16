@@ -850,6 +850,10 @@ def step():
             state = "LIVE"
     elif state == "LIVE":
         state = "WAIT"
+    elif sensor.link_lost and state != "ERROR":
+        # The client rescans and reconnects by itself; until notifications
+        # run again, report the lost link rather than a first-time wait.
+        state = "DISCONNECTED"
 
     if state == "LIVE" and sensor.write_handle is not None and (
         last_battery_request_ms is None

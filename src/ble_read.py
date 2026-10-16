@@ -135,6 +135,9 @@ class WT901BLEClient:
         self.write_handle = None
         self.connected = False
         self.state = "IDLE"
+        # True from a lost connection until notifications run again, so the
+        # display can report the loss while the client rescans.
+        self.link_lost = False
         self.latest = None
         self.sequence = 0
         self.last_packet_ms = 0
@@ -279,6 +282,7 @@ class WT901BLEClient:
             callback_conn_handle, value_handle, status = data
             if value_handle == CCCD_HANDLE_CANDIDATE and status == 0:
                 self.state = "LIVE"
+                self.link_lost = False
                 print("Sensor notifications enabled.")
             elif value_handle == CCCD_HANDLE_CANDIDATE:
                 self.state = "ERROR"
@@ -322,7 +326,7 @@ class WT901BLEClient:
             print("Sensor disconnected:", format_address(addr))
             self.latest = None
             self.sequence += 1
-            self.state = "DISCONNECTED"
+            self.link_lost = True
             self._start_scan()
 
 

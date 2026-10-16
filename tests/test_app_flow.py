@@ -165,17 +165,38 @@ def test_touch_navigation(app_with_touch, fake_clock, touch, panel, request):
     assert app.active_screen == 0
 
 
-def test_disconnect_shows_warning(app, fake_clock, panel):
+def test_disconnect_shows_warning(app, fake_clock, panel, request):
     from graphics import RED
 
     sim = go_live(app, fake_clock, pitch=0.1, roll=0.1)
     assert app.level_frame_active
     sim.disconnect()
     step(app, fake_clock)
-    # The client rescans immediately, so the state is SCANNING.
-    assert app.last_state == "SCANNING"
+    # The client is already rescanning, but the screen reports the lost link.
+    assert app.sensor.state == "SCANNING"
+    assert app.last_state == "DISCONNECTED"
     assert not app.level_frame_active
     assert panel.pixel(0, app.HORIZON_TOP) == RED
+    assert_matches_golden(request, "flow_disconnected", panel.pixels)
+
+    # Finding the sensor again does not clear the warning on its own...
+    sim.advertise()
+    step(app, fake_clock)
+    assert app.last_state == "DISCONNECTED"
+
+    # ...only working notifications and fresh data do.
+    sim.connect()
+    sim.attitude(roll=0.1, pitch=0.1)
+    step(app, fake_clock)
+    assert app.last_state == "LIVE"
+    assert app.level_frame_active
+
+
+def test_first_connection_waits_rather_than_disconnected(app, fake_clock):
+    step(app, fake_clock)
+    SensorSimulator().scan_done()
+    step(app, fake_clock)
+    assert app.last_state == "SCANNING"
 
 
 def test_touch_failure_disables_touch(app_with_touch, fake_clock):
