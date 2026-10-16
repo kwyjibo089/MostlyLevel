@@ -36,6 +36,9 @@ class TileFramebufferDisplay:
         if 0 <= x < self.width and y0 < y1:
             self.framebuffer.vline(x, y0 - self.top, y1 - y0, colour)
 
+    def bitmap(self, x, y, picture):
+        picture.blit_into(self.framebuffer, x, y - self.top, False)
+
     def fill_rect(self, x, y, width, height, colour):
         x0 = max(0, x)
         x1 = min(self.width, x + width)

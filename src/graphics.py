@@ -182,6 +182,22 @@ class Graphics:
     def fill_rect(self, x, y, w, h, colour):
         self.lcd.fill_rect(x, y, w, h, colour)
 
+    def bitmap(self, x, y, picture):
+        """Draw a compositor.Bitmap; targets without bitmap() get its rects."""
+        if hasattr(self.lcd, "bitmap"):
+            self.lcd.bitmap(x, y, picture)
+            return
+        for rect_x, rect_y, w, h, colour in picture.rects():
+            self.lcd.fill_rect(x + rect_x, y + rect_y, w, h, colour)
+
+    def item(self, item):
+        """Draw a display-list item: a filled rect or a Bitmap."""
+        x, y, w, h, colour = item
+        if isinstance(colour, int):
+            self.lcd.fill_rect(x, y, w, h, colour)
+        else:
+            self.bitmap(x, y, colour)
+
     def text(self, x, y, message, colour=WHITE, scale=1):
         cursor_x = x
 
