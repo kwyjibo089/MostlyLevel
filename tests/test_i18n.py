@@ -110,9 +110,11 @@ def test_missing_language_file_falls_back_to_english(app, tmp_path, capsys):
 
 
 def test_numbers_use_the_language_decimal_separator(app):
-    app.i18n.load("de")
+    app.i18n.load("fr")
     assert app.readout_text({"pitch": 1.25, "roll": -0.5}) == ("P +1,2°", "R -0,5°")
     assert app.cm_text(3.45) == "3,5 cm"
+    app.i18n.load("de")  # Owner choice: decimal point, as usual in Switzerland.
+    assert app.cm_text(3.45) == "3.5 cm"
     app.i18n.load("en")
     assert app.cm_text(3.45) == "3.5 cm"
 

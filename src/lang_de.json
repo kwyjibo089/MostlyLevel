@@ -1,5 +1,5 @@
 {
-  "decimal": ",",
+  "decimal": ".",
   "status_live": "LIVE",
   "status_scanning": "SUCHE",
   "status_connecting": "VERBINDE",
