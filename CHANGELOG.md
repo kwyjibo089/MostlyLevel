@@ -4,6 +4,7 @@ Notable project changes are recorded here. This file was introduced with the ini
 
 ## Unreleased
 
+- German numbers use a decimal point instead of a comma (owner choice, Swiss convention).
 - CALIBRATE and the language button now need a press of about one second (`LONG_PRESS_MS` in `config.py`); a bar along the button fills while holding, and releasing or sliding off cancels. A stray touch can no longer overwrite the level reference or switch the language. Checked on the board with a simulated touch; not yet with a finger.
 - Pitch and roll readouts use P and R in every language (owner choice), instead of L/Q (German), T/R (French), and L/T (Spanish).
 - Moved the language switch from the header, where the printed case made it almost unreachable, to a cyan rounded button on the HORIZON page, left of CALIBRATE on the same line; its touch area is slightly larger than the button. The header looks as it did before languages were added. Reference images regenerated and reviewed.
