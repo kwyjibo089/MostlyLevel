@@ -63,6 +63,22 @@ def sensor_fixture():
     for packet in invalid:
         packets.append({"hex": packet.hex(), "decoded": None})
 
+    # Notifications as received, split into frames like the client does.
+    power = bytes.fromhex("55716400810100000000000000000000e8030000")
+    notifications = [
+        good,
+        power + good,
+        good + power,
+        good + power + good,
+        good + b"\x55",
+        good + b"\x00" + good[1:],
+        good[:7],
+    ]
+    split = [
+        {"hex": packet.hex(), "frames": [frame.hex() for frame in ble_read.split_frames(packet)]}
+        for packet in notifications
+    ]
+
     battery_raw = [
         400, 397, 396, 393, 387, 385, 382, 379, 377, 373, 370, 368, 351, 350, 340, 339, 0,
     ]
@@ -77,6 +93,7 @@ def sensor_fixture():
             "percent": ble_read.battery_percent(385),
         },
         "battery_percent": [[raw, ble_read.battery_percent(raw)] for raw in battery_raw],
+        "notifications": split,
     }
 
 

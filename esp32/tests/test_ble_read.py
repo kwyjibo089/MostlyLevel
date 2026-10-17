@@ -155,6 +155,42 @@ def test_power_read_request_and_response(client):
     assert client.last_power_response == power_packet(385)
 
 
+@pytest.mark.parametrize("power_first", [True, False])
+def test_two_frames_in_one_notification_are_both_used(client, power_first):
+    # Seen on the real sensor 2026-10-17: a register response and an attitude
+    # packet arriving together in one 40-byte notification.
+    sim = SensorSimulator()
+    sim.connect()
+    frames = (power_packet(385), attitude_packet(roll=1.5))
+    sim.notify(b"".join(frames if power_first else frames[::-1]))
+    assert client.power_percent == 60
+    assert client.latest["roll"] == pytest.approx(1.5, abs=0.01)
+
+
+@pytest.mark.parametrize(
+    "packet",
+    [
+        attitude_packet(roll=1.5) + b"\x55",  # Not a whole number of frames.
+        # The second frame lacks the header.
+        attitude_packet(roll=1.5) + b"\x00" + attitude_packet()[1:],
+    ],
+)
+def test_notifications_that_are_not_whole_frames_are_ignored(client, packet):
+    sim = SensorSimulator()
+    sim.connect()
+    sim.notify(packet)
+    assert client.latest is None
+
+
+def test_split_frames(ble_read):
+    one = attitude_packet(roll=1.0)
+    two = power_packet(385)
+    assert list(ble_read.split_frames(one)) == [one]
+    assert list(ble_read.split_frames(one + two)) == [one, two]
+    assert list(ble_read.split_frames(one + two + one)) == [one, two, one]
+    assert list(ble_read.split_frames(one[:7])) == [one[:7]]
+
+
 def test_power_read_needs_connection(client):
     with pytest.raises(RuntimeError):
         client.request_power_read()

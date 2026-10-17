@@ -116,6 +116,25 @@ def decode_packet(packet):
     }
 
 
+def split_frames(packet):
+    """Split a notification into 20-byte frames.
+
+    The sensor sometimes sends two frames in one notification (seen
+    2026-10-17: a 55 71 register response followed by a 55 61 attitude
+    packet, 40 bytes). Anything that is not a whole number of frames
+    starting with the header is returned as it is.
+    """
+    size = SENSOR_ATTITUDE_PACKET_LENGTH
+    if len(packet) <= size or len(packet) % size:
+        return (packet,)
+    frames = []
+    for offset in range(0, len(packet), size):
+        if packet[offset] != SENSOR_PACKET_HEADER:
+            return (packet,)
+        frames.append(packet[offset:offset + size])
+    return frames
+
+
 def print_measurements(values):
     print(
         "%s P:%+.2f R:%+.2f Y:%+.2f"
@@ -262,6 +281,36 @@ class WT901BLEClient:
             % SENSOR_POWER_REGISTER
         )
 
+    def _handle_frame(self, packet):
+        """Store one 20-byte frame: a register response or an attitude packet."""
+        if (
+            len(packet) >= 4
+            and packet[0] == SENSOR_PACKET_HEADER
+            and packet[1] == SENSOR_REGISTER_PACKET_TYPE
+        ):
+            self.last_power_response = packet
+            print("Sensor register response:", format_hex(packet))
+
+            start_register = packet[2] | (packet[3] << 8)
+            if start_register == SENSOR_POWER_REGISTER and len(packet) >= 6:
+                self.power_raw = packet[4] | (packet[5] << 8)
+                self.power_voltage = self.power_raw / SENSOR_POWER_VOLTAGE_DIVISOR
+                self.power_percent = battery_percent(self.power_raw)
+                print(
+                    "Sensor battery: %d%% (%.2f V, raw %d)"
+                    % (self.power_percent, self.power_voltage, self.power_raw)
+                )
+            return
+
+        values = decode_packet(packet)
+        if values is None:
+            return
+
+        self.latest = values
+        self.last_packet_ms = time.ticks_ms()
+        self.sequence += 1
+        self.failed_recoveries = 0
+
     def _irq(self, event, data):
         if event == _IRQ_SCAN_RESULT:
             addr_type, addr, adv_type, rssi, adv_data = data
@@ -353,33 +402,11 @@ class WT901BLEClient:
                 return
 
             packet = bytes(notify_data)
-            if (
-                len(packet) >= 4
-                and packet[0] == SENSOR_PACKET_HEADER
-                and packet[1] == SENSOR_REGISTER_PACKET_TYPE
-            ):
-                self.last_power_response = packet
-                print("Sensor register response:", format_hex(packet))
-
-                start_register = packet[2] | (packet[3] << 8)
-                if start_register == SENSOR_POWER_REGISTER and len(packet) >= 6:
-                    self.power_raw = packet[4] | (packet[5] << 8)
-                    self.power_voltage = self.power_raw / SENSOR_POWER_VOLTAGE_DIVISOR
-                    self.power_percent = battery_percent(self.power_raw)
-                    print(
-                        "Sensor battery: %d%% (%.2f V, raw %d)"
-                        % (self.power_percent, self.power_voltage, self.power_raw)
-                    )
-                return
-
-            values = decode_packet(packet)
-            if values is None:
-                return
-
-            self.latest = values
-            self.last_packet_ms = time.ticks_ms()
-            self.sequence += 1
-            self.failed_recoveries = 0
+            if len(packet) == SENSOR_ATTITUDE_PACKET_LENGTH:
+                self._handle_frame(packet)  # The usual case: one frame.
+            else:
+                for frame in split_frames(packet):
+                    self._handle_frame(frame)
 
         elif event == _IRQ_PERIPHERAL_DISCONNECT:
             disconnected_handle, addr_type, addr = data
