@@ -15,7 +15,7 @@ import {
   SENSOR_POWER_READ_COMMAND,
 } from '../src/config';
 import { cornerLifts, isLevel, vanTilt, vehicleAttitude, wedgeAdvice } from '../src/levelling';
-import { batteryPercent, decodePacket, decodePowerResponse, hexToBytes } from '../src/sensor/protocol';
+import { batteryPercent, decodePacket, decodePowerResponse, hexToBytes, splitFrames } from '../src/sensor/protocol';
 
 const dims = {
   wheelbaseMm: levelling.vehicle.wheelbase_mm,
@@ -43,6 +43,10 @@ describe('sensor packets', () => {
   test("power response from the owner's sensor", () => {
     const power = decodePowerResponse(hexToBytes(sensor.power_response.hex));
     expect(power).toEqual({ raw: 385, voltage: 3.85, percent: sensor.power_response.percent });
+  });
+
+  test.each(sensor.notifications)('splits a notification of $hex', ({ hex, frames }) => {
+    expect(splitFrames(hexToBytes(hex))).toEqual(frames.map(hexToBytes));
   });
 
   test.each(sensor.battery_percent)('battery raw %d is %d %%', (raw, percent) => {
