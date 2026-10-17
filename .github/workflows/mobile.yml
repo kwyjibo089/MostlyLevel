@@ -1,0 +1,48 @@
+name: mobile
+
+# Not a required check, so path filters are safe here (see esp32.yml).
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "mobile/**"
+      - "shared/**"
+      - ".github/workflows/mobile.yml"
+  push:
+    branches: [main]
+    paths:
+      - "mobile/**"
+      - "shared/**"
+      - ".github/workflows/mobile.yml"
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: mobile
+
+jobs:
+  check:
+    name: typecheck and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Tests (including parity with the ESP32 fixtures)
+        run: npx jest --ci
+
+      - name: Expo dependency check
+        run: npx expo-doctor

@@ -1,6 +1,7 @@
 # Guidance for future sessions
 
-- The repository holds several projects: `esp32/` (the MicroPython display app), `mobile/` (planned React Native Android app with the same functionality), `shared/` (files used by both, such as the screen texts in `shared/i18n/`), `hardware/` (KiCad PCB), and `case/` (enclosure). Run the ESP32 tools from `esp32/`.
+- The repository holds several projects: `esp32/` (the MicroPython display app), `mobile/` (React Native Android app with the same functionality; see `mobile/README.md` and `mobile/AGENTS.md`), `shared/` (files used by both, such as the screen texts in `shared/i18n/`), `hardware/` (KiCad PCB), and `case/` (enclosure). Run the ESP32 tools from `esp32/`.
+- Keep the two apps' behaviour in step: when the decoder, levelling maths, thresholds, or recovery rules change, change both, run `esp32/tools/make_fixtures.py`, and run the tests in both (`esp32/tools/test.sh`, `cd mobile && npm run check`).
 - Treat the application source in `esp32/src/` as the implementation source of truth.
 - `esp32/reference/esp32_s3_es3c28p/` is a separate ESP-IDF board-support reference. Do not describe its features as part of the MicroPython application unless the application is changed to use them.
 - Keep confirmed repository facts, hardware-tested behavior, plans, and assumptions distinct. Do not infer missing wiring, sensor settings, or successful hardware behavior.

@@ -4,7 +4,7 @@
 
 MostlyLevel is a campervan levelling display prototype. The active application is a small MicroPython program under `esp32/src/`; it shows pitch and roll on an ILI9341 display as two tilting views of the van: from behind, tilting with roll, and from the right, tilting with pitch, each on fixed level ground and consumes decoded readings from the WT901 BLE client in `ble_read.py`. The decoder also returns yaw, which the display currently ignores.
 
-The repository is a monorepo: `esp32/` holds the MicroPython app with its tests and tools, `shared/i18n/` the screen texts, `hardware/` the KiCad PCB project, and `case/` the enclosure (empty so far). A React Native Android app with the same functionality is planned under `mobile/`.
+The repository is a monorepo: `esp32/` holds the MicroPython app with its tests and tools, `shared/i18n/` the screen texts, `hardware/` the KiCad PCB project, and `case/` the enclosure (empty so far). `mobile/` holds a React Native (Expo) Android app with the same functionality, connecting to the sensor directly; `shared/fixtures/` (generated from the ESP32 code) checks that both apps decode and compute the same way.
 
 The repository also contains an ESP-IDF board support package under `esp32/reference/esp32_s3_es3c28p/`. Treat it as reference material, not as the active application build. A MicroPython ESP32_GENERIC_S3 firmware image is present under `esp32/firmware/`. On 2026-10-15 the connected board reported MicroPython 1.29.0, build `ESP32_GENERIC_S3`, the same version as that image; how it was flashed is not recorded.
 
