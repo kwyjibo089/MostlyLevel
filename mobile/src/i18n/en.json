@@ -81,5 +81,13 @@
   "colour_blue": "Blue",
   "colour_red": "Red",
   "colour_sand": "Sand",
-  "colour_green": "Green"
+  "colour_green": "Green",
+  "status_no_sensor": "No sensor",
+  "warning_no_sensor": "This phone has no accelerometer",
+  "source": "Sensor source",
+  "source_wt901": "WT901 Bluetooth sensor",
+  "source_wt901_hint": "Mounted in the van, calibrated once",
+  "source_phone": "This phone",
+  "source_phone_hint": "No extra hardware",
+  "source_phone_placement": "Lay the phone flat, screen up, with its top toward the front of the van. Put it in the same spot every time and calibrate there once."
 }

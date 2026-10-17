@@ -23,9 +23,10 @@ const STATUS_KEYS: Record<DisplayState, TextKey> = {
   IDLE: 'status_idle',
   'BLUETOOTH OFF': 'status_bluetooth_off',
   'NO PERMISSION': 'status_no_permission',
+  'NO SENSOR': 'status_no_sensor',
 };
 
-const WARN_STATES: DisplayState[] = ['ERROR', 'DISCONNECTED', 'NO DATA', 'BLUETOOTH OFF', 'NO PERMISSION'];
+const WARN_STATES: DisplayState[] = ['ERROR', 'DISCONNECTED', 'NO DATA', 'BLUETOOTH OFF', 'NO PERMISSION', 'NO SENSOR'];
 
 function statusColour(state: DisplayState): string {
   if (state === 'LIVE') return colours.level;
@@ -43,6 +44,8 @@ export function warningText(state: DisplayState, t: Translate): string {
       return t('warning_bluetooth_off');
     case 'NO PERMISSION':
       return t('warning_no_permission');
+    case 'NO SENSOR':
+      return t('warning_no_sensor');
     default:
       return t('warning_waiting');
   }

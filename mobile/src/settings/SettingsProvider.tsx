@@ -8,28 +8,42 @@ import { DEFAULT_LANGUAGE, DEFAULT_SENSOR_ID, Language, LANGUAGES } from '../con
 import { translator, Translate } from '../i18n';
 import type { Dimensions, LevelReference } from '../levelling';
 
+export type SensorSource = 'wt901' | 'phone';
+export const SENSOR_SOURCES: readonly SensorSource[] = ['wt901', 'phone'];
+
 export type Settings = {
   language: Language;
+  /** Where pitch and roll come from: the WT901 over Bluetooth, or the phone itself. */
+  source: SensorSource;
   sensorId: string;
   camper: CamperKey;
   colour: BodyColour;
   dimensions: Dimensions;
-  /** Level reference from CALIBRATE, in vehicle axes. */
+  /** Level reference from CALIBRATE with the WT901, in vehicle axes. */
   zero: LevelReference;
+  /** Level reference from CALIBRATE with the phone's sensor (a different offset). */
+  phoneZero: LevelReference;
 };
 
 const STORAGE_KEY = 'mostlylevel.settings.v1';
 
 export const DEFAULT_SETTINGS: Settings = {
   language: DEFAULT_LANGUAGE,
+  source: 'wt901',
   sensorId: DEFAULT_SENSOR_ID,
   camper: DEFAULT_CAMPER,
   colour: DEFAULT_COLOUR,
   dimensions: { ...CAMPERS[DEFAULT_CAMPER].defaults },
   zero: { pitch: 0, roll: 0 },
+  phoneZero: { pitch: 0, roll: 0 },
 };
 
 /** Keep only valid stored values, so a damaged entry falls back to defaults. */
+/** The level reference of the active sensor source. */
+export function activeZero(settings: Settings): LevelReference {
+  return settings.source === 'phone' ? settings.phoneZero : settings.zero;
+}
+
 export function sanitize(stored: unknown): Settings {
   const s = (typeof stored === 'object' && stored !== null ? stored : {}) as Partial<Settings>;
   const positive = (value: unknown, fallback: number) =>
@@ -38,6 +52,7 @@ export function sanitize(stored: unknown): Settings {
   const camper = CAMPER_KEYS.includes(s.camper as CamperKey) ? (s.camper as CamperKey) : DEFAULT_SETTINGS.camper;
   const dims = s.dimensions ?? DEFAULT_SETTINGS.dimensions;
   return {
+    source: SENSOR_SOURCES.includes(s.source as SensorSource) ? (s.source as SensorSource) : DEFAULT_SETTINGS.source,
     language: LANGUAGES.includes(s.language as Language) ? (s.language as Language) : DEFAULT_SETTINGS.language,
     sensorId: typeof s.sensorId === 'string' && s.sensorId.length > 0 ? s.sensorId : DEFAULT_SETTINGS.sensorId,
     camper,
@@ -48,6 +63,7 @@ export function sanitize(stored: unknown): Settings {
       rearTrackMm: positive(dims.rearTrackMm, DEFAULT_SETTINGS.dimensions.rearTrackMm),
     },
     zero: { pitch: finite(s.zero?.pitch), roll: finite(s.zero?.roll) },
+    phoneZero: { pitch: finite(s.phoneZero?.pitch), roll: finite(s.phoneZero?.roll) },
   };
 }
 

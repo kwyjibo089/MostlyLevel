@@ -7,10 +7,10 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-import { Attitude, isLevel, vehicleAttitude } from '../levelling';
+import { Attitude, isLevel } from '../levelling';
 import type { DisplayState } from '../sensor/client';
 import { useSensor } from '../sensor/SensorProvider';
-import { useSettings } from '../settings/SettingsProvider';
+import { activeZero, useSettings } from '../settings/SettingsProvider';
 
 export type AttitudeView = {
   shown: DisplayState;
@@ -25,15 +25,15 @@ export type AttitudeView = {
 const SMOOTHING = 0.25; // Share of the remaining distance covered per frame.
 
 export function useAttitude(): AttitudeView {
-  const { snapshot, shown } = useSensor();
+  const { raw, sequence, shown, battery } = useSensor();
   const { settings } = useSettings();
-  const hasValues = snapshot.latest !== null;
-  const attitude = snapshot.latest ? vehicleAttitude(snapshot.latest, settings.zero) : null;
+  const zero = activeZero(settings);
+  const attitude = raw ? { pitch: raw.pitch - zero.pitch, roll: raw.roll - zero.roll } : null;
 
   // Hysteresis: decided once per new sample (or state change), as on the ESP32.
   const level = useRef(false);
   const decidedFor = useRef<string>('');
-  const key = `${snapshot.sequence}|${shown}|${settings.zero.pitch}|${settings.zero.roll}`;
+  const key = `${settings.source}|${sequence}|${shown}|${zero.pitch}|${zero.roll}`;
   if (decidedFor.current !== key) {
     decidedFor.current = key;
     level.current = shown === 'LIVE' && attitude !== null && isLevel(attitude.pitch, attitude.roll, level.current);
@@ -63,10 +63,10 @@ export function useAttitude(): AttitudeView {
 
   return {
     shown,
-    attitude: hasValues ? attitude : null,
+    attitude,
     drawn,
     levelFrame: level.current,
     // Like the ESP32 header: the last known reading stays until a new one.
-    batteryPercent: snapshot.battery?.percent ?? null,
+    batteryPercent: battery?.percent ?? null,
   };
 }

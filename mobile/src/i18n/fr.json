@@ -81,5 +81,13 @@
   "colour_blue": "Bleu",
   "colour_red": "Rouge",
   "colour_sand": "Sable",
-  "colour_green": "Vert"
+  "colour_green": "Vert",
+  "status_no_sensor": "Pas de capteur",
+  "warning_no_sensor": "Ce téléphone n'a pas d'accéléromètre",
+  "source": "Source du capteur",
+  "source_wt901": "Capteur Bluetooth WT901",
+  "source_wt901_hint": "Fixé dans le véhicule, calibré une fois",
+  "source_phone": "Ce téléphone",
+  "source_phone_hint": "Aucun matériel supplémentaire",
+  "source_phone_placement": "Posez le téléphone à plat, écran vers le haut, le haut vers l'avant du véhicule. Placez-le toujours au même endroit et calibrez-y une fois."
 }

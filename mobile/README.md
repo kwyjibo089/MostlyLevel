@@ -12,7 +12,8 @@ A React Native (Expo) app with the same functionality as the ESP32 display in [`
 - **Calibrate:** hold for 1 s with a live sensor to save the current attitude as level.
 - **Level frame:** green around the screen while pitch and roll are within ±0.5°, kept until either exceeds ±0.7°. A red frame and a warning show when data is stale (> 1.5 s), the link is lost, the app is still searching, Bluetooth is off, or access was refused.
 - **Battery:** the sensor's battery percentage, polled every 60 s.
-- **Settings:** language (EN, DE, FR, ES), scanning for and choosing the sensor, camper type (compact van, panel van, alcove, semi-integrated, integrated) and body colour, and wheelbase / track widths.
+- **Sensor source:** the WT901 over Bluetooth, or the **phone's own accelerometer** (no extra hardware). The phone lies flat, screen up, top toward the front of the van, always in the same spot; each source keeps its own calibration. Switching to the phone disconnects the WT901, so the ESP32 display can use it.
+- **Settings:** sensor source, language (EN, DE, FR, ES), scanning for and choosing the sensor, camper type (compact van, panel van, alcove, semi-integrated, integrated) and body colour, and wheelbase / track widths.
 - The screen stays on while the app is open. In the background the app disconnects, because the sensor accepts one connection at a time (so the ESP32 display can use it).
 
 Differences from the ESP32, by design: the vans and horizon are smoothed between samples (readouts and lifts are not); the language is changed in settings or with the button next to CALIBRATE by a single tap; camper type, colour, dimensions, and the sensor are chosen in the app instead of `config.py`.
@@ -25,6 +26,7 @@ Differences from the ESP32, by design: the vans and horizon are smoothed between
 | `src/sensor/protocol.ts` | WT901 packet and battery decoding (port of `ble_read.py`) |
 | `src/sensor/client.ts` | BLE client state machine with the ESP32's recovery rules, behind a transport interface |
 | `src/sensor/bleManagerTransport.ts` | The transport on `react-native-ble-manager` |
+| `src/sensor/phone.ts` | The phone's accelerometer as attitude source: gravity to pitch/roll, low-pass filter |
 | `src/levelling.ts` | Axis mapping, level reference, corner lifts, wedge ranking, hysteresis, van tilt (port of `app.py`) |
 | `src/campers.ts` | Camper drawings (vector layers), typical dimensions, colours |
 | `src/app/` | Screens (Expo Router): Attitude, Levelling, Settings |

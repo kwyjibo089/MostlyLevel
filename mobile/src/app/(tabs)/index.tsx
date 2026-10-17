@@ -12,14 +12,13 @@ import { hintFor, VanScene } from '../../components/VanScene';
 import { LANGUAGES } from '../../config';
 import { useAttitude } from '../../hooks/useAttitude';
 import { formatSigned, TextKey } from '../../i18n';
-import { levelReferenceFrom } from '../../levelling';
 import { useSensor } from '../../sensor/SensorProvider';
 import { useSettings } from '../../settings/SettingsProvider';
 import { colours, fonts } from '../../theme';
 
 export default function AttitudePage() {
   const { settings, update, t } = useSettings();
-  const { snapshot } = useSensor();
+  const { raw, source } = useSensor();
   const { shown, attitude, drawn } = useAttitude();
   const [view, setView] = useState<'van' | 'horizon'>('van');
   const [toast, setToast] = useState<{ key: TextKey; ok: boolean } | null>(null);
@@ -37,8 +36,9 @@ export default function AttitudePage() {
 
   const calibrate = () => {
     // Save the live attitude as level, or explain why that is not possible.
-    if (shown === 'LIVE' && snapshot.latest !== null) {
-      update({ zero: levelReferenceFrom(snapshot.latest) });
+    if (shown === 'LIVE' && raw !== null) {
+      // Each source keeps its own reference: the phone rests elsewhere than the sensor.
+      update(source === 'phone' ? { phoneZero: raw } : { zero: raw });
       showToast('calibrate_saved', true);
     } else {
       showToast('warning_calibrate_needs_sensor', false);

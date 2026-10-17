@@ -46,7 +46,7 @@ export type ClientState =
   | 'NO PERMISSION';
 
 /** What the screen shows, derived like the ESP32 main loop does. */
-export type DisplayState = ClientState | 'NO DATA' | 'WAIT' | 'DISCONNECTED';
+export type DisplayState = ClientState | 'NO DATA' | 'WAIT' | 'DISCONNECTED' | 'NO SENSOR';
 
 export type Characteristic = { service: string; characteristic: string };
 export type FoundDevice = { id: string; name: string | null; rssi: number };

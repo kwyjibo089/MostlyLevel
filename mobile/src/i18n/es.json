@@ -81,5 +81,13 @@
   "colour_blue": "Azul",
   "colour_red": "Rojo",
   "colour_sand": "Arena",
-  "colour_green": "Verde"
+  "colour_green": "Verde",
+  "status_no_sensor": "Sin sensor",
+  "warning_no_sensor": "Este teléfono no tiene acelerómetro",
+  "source": "Fuente del sensor",
+  "source_wt901": "Sensor Bluetooth WT901",
+  "source_wt901_hint": "Fijo en el vehículo, calibrado una vez",
+  "source_phone": "Este teléfono",
+  "source_phone_hint": "Sin hardware adicional",
+  "source_phone_placement": "Coloca el teléfono plano, pantalla hacia arriba, con la parte superior hacia la parte delantera. Ponlo siempre en el mismo sitio y calibra allí una vez."
 }
