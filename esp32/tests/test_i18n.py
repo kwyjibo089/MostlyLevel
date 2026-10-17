@@ -3,7 +3,7 @@
 import json
 
 import pytest
-from support.app import SRC, load_app
+from support.app import TEXTS, load_app
 
 CODES = ("en", "de", "fr", "es")
 CHAR = 6  # Pixels per character at scale 1.
@@ -23,7 +23,7 @@ WIDTHS = {
 
 
 def texts(code):
-    return json.loads((SRC / ("lang_%s.json" % code)).read_text(encoding="utf-8"))
+    return json.loads((TEXTS / ("lang_%s.json" % code)).read_text(encoding="utf-8"))
 
 
 @pytest.mark.parametrize("code", CODES)

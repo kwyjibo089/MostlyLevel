@@ -1,0 +1,4 @@
+(fp_lib_table
+  (version 7)
+
+  (lib (name "mostlylevel") (type "KiCad") (uri "${KIPRJMOD}/mostlylevel.pretty") (options "") (descr "")))
