@@ -5,6 +5,8 @@ import pathlib
 import sys
 
 SRC = pathlib.Path(__file__).resolve().parents[2] / "src"
+# The language files are shared with the mobile app.
+TEXTS = pathlib.Path(__file__).resolve().parents[3] / "shared" / "i18n"
 SRC_MODULES = (
     "config",
     "i18n",
@@ -36,7 +38,7 @@ def load_app(reference_file):
     """
     app = fresh_import("app")
     app.LEVEL_REFERENCE_FILE = str(reference_file)
-    app.i18n.TEXT_DIR = str(SRC) + "/"
+    app.i18n.TEXT_DIR = str(TEXTS) + "/"
     app.i18n.LANGUAGE_FILE = str(reference_file.parent / "language.cfg")
     app.setup()
     return app

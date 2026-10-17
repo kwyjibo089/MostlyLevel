@@ -4,7 +4,7 @@ MostlyLevel's own code is licensed under the MIT License (see `LICENSE`). The pa
 
 ## Adafruit ILI9341 library — display initialisation values
 
-`src/ili9341.py` (`_init_display`) uses the ILI9341 power, VCOM, frame-rate, display-function, and gamma values from the `initcmd` table in Adafruit's Arduino library, <https://github.com/adafruit/Adafruit_ILI9341> (`Adafruit_ILI9341.cpp`). The values match that table byte for byte (compared on 2026-10-16); the Python driver around them is MostlyLevel's own. The library ships no separate license file; its source header states:
+`esp32/src/ili9341.py` (`_init_display`) uses the ILI9341 power, VCOM, frame-rate, display-function, and gamma values from the `initcmd` table in Adafruit's Arduino library, <https://github.com/adafruit/Adafruit_ILI9341> (`Adafruit_ILI9341.cpp`). The values match that table byte for byte (compared on 2026-10-16); the Python driver around them is MostlyLevel's own. The library ships no separate license file; its source header states:
 
 ```
 Written by Limor "ladyada" Fried for Adafruit Industries.
@@ -16,7 +16,7 @@ The full header of `Adafruit_ILI9341.cpp` also reads, in part: "Adafruit invests
 
 ## Adafruit GFX library — 5×7 font
 
-The `FONT` table in `src/graphics.py` is a 5×7 column bitmap font of the kind in Adafruit GFX's classic font, <https://github.com/adafruit/Adafruit-GFX-Library> (`glcdfont.c`). Of its original 43 glyphs, 26 are identical to the current `glcdfont.c` (compared on 2026-10-16); the others match variants of the same widely copied 5×7 font, so the exact source is not established. It is attributed to Adafruit as the likely origin. The comma and the accented capitals (`ACCENT_MARKS`, `ACCENTED`), added on 2026-10-16, are MostlyLevel's own. Adafruit GFX's license:
+The `FONT` table in `esp32/src/graphics.py` is a 5×7 column bitmap font of the kind in Adafruit GFX's classic font, <https://github.com/adafruit/Adafruit-GFX-Library> (`glcdfont.c`). Of its original 43 glyphs, 26 are identical to the current `glcdfont.c` (compared on 2026-10-16); the others match variants of the same widely copied 5×7 font, so the exact source is not established. It is attributed to Adafruit as the likely origin. The comma and the accented capitals (`ACCENT_MARKS`, `ACCENTED`), added on 2026-10-16, are MostlyLevel's own. Adafruit GFX's license:
 
 ```
 Software License Agreement (BSD License)
@@ -45,10 +45,10 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 ```
 
-## MicroPython firmware — `firmware/`
+## MicroPython firmware — `esp32/firmware/`
 
-`firmware/ESP32_GENERIC_S3-20260824-v1.29.0.bin` is the official MicroPython 1.29.0 build for ESP32-S3: its SHA-256 (`1dd9dcd2…8285e300`) matches the download from <https://micropython.org/resources/firmware/ESP32_GENERIC_S3-20260824-v1.29.0.bin> (checked 2026-10-16). MicroPython is MIT-licensed, Copyright (c) 2013-2026 Damien P. George; the binary also contains third-party components (for example ESP-IDF and NimBLE, under Apache-2.0) under their own licenses. The full MicroPython license, including its component license summary, is in `firmware/MICROPYTHON_LICENSE`, copied from the v1.29.0 source tree.
+`esp32/firmware/ESP32_GENERIC_S3-20260824-v1.29.0.bin` is the official MicroPython 1.29.0 build for ESP32-S3: its SHA-256 (`1dd9dcd2…8285e300`) matches the download from <https://micropython.org/resources/firmware/ESP32_GENERIC_S3-20260824-v1.29.0.bin> (checked 2026-10-16). MicroPython is MIT-licensed, Copyright (c) 2013-2026 Damien P. George; the binary also contains third-party components (for example ESP-IDF and NimBLE, under Apache-2.0) under their own licenses. The full MicroPython license, including its component license summary, is in `esp32/firmware/MICROPYTHON_LICENSE`, copied from the v1.29.0 source tree.
 
-## Espressif board-support reference — `reference/esp32_s3_es3c28p/`
+## Espressif board-support reference — `esp32/reference/esp32_s3_es3c28p/`
 
-The ESP-IDF board-support package in `reference/` is not part of the MicroPython application. Its header files state `SPDX-License-Identifier: Apache-2.0` with Espressif Systems (Shanghai) CO LTD copyright. Its README refers to a LICENSE file that was not included when it was copied here; `reference/esp32_s3_es3c28p/LICENSE` now holds the Apache License 2.0 text from <https://www.apache.org/licenses/LICENSE-2.0.txt>, matching those headers. `src/esp32_s3_es3c28p.c` and the board images in `doc/` carry no license statement; their terms are not established.
+The ESP-IDF board-support package in `esp32/reference/` is not part of the MicroPython application. Its header files state `SPDX-License-Identifier: Apache-2.0` with Espressif Systems (Shanghai) CO LTD copyright. Its README refers to a LICENSE file that was not included when it was copied here; `esp32/reference/esp32_s3_es3c28p/LICENSE` now holds the Apache License 2.0 text from <https://www.apache.org/licenses/LICENSE-2.0.txt>, matching those headers. `esp32/src/esp32_s3_es3c28p.c` and the board images in `doc/` carry no license statement; their terms are not established.

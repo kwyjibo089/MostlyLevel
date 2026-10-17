@@ -12,7 +12,7 @@ from config import DEFAULT_LANGUAGE, LANGUAGES
 
 LANGUAGE_FILE = "/language.cfg"
 # Folder holding the lang_<code>.json files; the board keeps them next to
-# main.py. Tests point this at src/.
+# main.py. Tests point this at shared/i18n/.
 TEXT_DIR = "/"
 
 texts = {}

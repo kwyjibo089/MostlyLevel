@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Capture the running dashboard as assets/<name>.png.
+# Capture the running dashboard as assets/<name>.png in the repository root.
 #
 # Interrupts the app, calls save_screenshot() on the board, copies the BMP to
 # a temporary folder, deletes it from the board, converts it to PNG with
@@ -53,7 +53,7 @@ if [[ -z "$base" ]]; then
     echo "File name needs more than an extension: $name" >&2
     exit 2
 fi
-png="${ASSETS_DIR:-$repo_root/assets}/$base.png"
+png="${ASSETS_DIR:-$repo_root/../assets}/$base.png"
 # On the board: without an extension, or with any extension other than .bmp,
 # append .bmp (wedges.png -> wedges.png.bmp).
 if [[ "${name,,}" != *.bmp ]]; then

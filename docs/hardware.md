@@ -2,7 +2,7 @@
 
 ## Evidence in the repository
 
-`src/ili9341.py` labels its wiring as ES3C28P and configures these display connections:
+`esp32/src/ili9341.py` labels its wiring as ES3C28P and configures these display connections:
 
 | Display signal | GPIO | Evidence |
 | --- | ---: | --- |
@@ -16,9 +16,9 @@
 
 The application uses a 240 × 320 coordinate space and an ILI9341 initialization sequence. The reference BSP README describes an ES3C28P/ES3N28P family board and additional peripherals, but this does not confirm the user's physical board variant or which peripherals are fitted.
 
-`src/config.py` is the editable location for configured sensor identity and protocol assumptions, sensor-to-vehicle axis mapping, owner-provided van geometry, update timing, and board pin assignments. Centralizing a value there does not make that value hardware-verified.
+`esp32/src/config.py` is the editable location for configured sensor identity and protocol assumptions, sensor-to-vehicle axis mapping, owner-provided van geometry, update timing, and board pin assignments. Centralizing a value there does not make that value hardware-verified.
 
-`src/touch.py` implements basic FT5x06-compatible touch reads over I2C address `0x38`, using GPIO 15/16 and reset GPIO 18 as specified by the separate ES3C28P reference BSP. The app draws `ATTITUDE` and `LEVELLING` navigation buttons, sub-page tabs on each page, and long-press buttons for CALIBRATE and the language. The owner uses these on the device (navigation, tabs, language switching), so wiring and coordinate orientation work in practice; the controller is listed as an FT6336G in the vendor documentation, and it has not been identified on the physical unit.
+`esp32/src/touch.py` implements basic FT5x06-compatible touch reads over I2C address `0x38`, using GPIO 15/16 and reset GPIO 18 as specified by the separate ES3C28P reference BSP. The app draws `ATTITUDE` and `LEVELLING` navigation buttons, sub-page tabs on each page, and long-press buttons for CALIBRATE and the language. The owner uses these on the device (navigation, tabs, language switching), so wiring and coordinate orientation work in practice; the controller is listed as an FT6336G in the vendor documentation, and it has not been identified on the physical unit.
 
 The owner provided a wheelbase of 4,035 mm, approximate front track width of 1,810 mm, and rear track width of 1,790 mm. The corner-height calculation uses these distances and the live pitch/roll angles, then displays the two corners with the largest estimated lifts for the owner's two-wedge setup. Left and right refer to the vehicle's forward direction. It assumes the sensor is located at the center of the wheel footprint, positive pitch raises the front, and positive roll raises the left side. It models the van floor as a rigid plane and calculates lift amounts relative to the highest corner. These are geometric estimates rather than a guarantee that only those two wheel positions will need adjustment; check the live readings again after placing wedges. The angle signs were confirmed on the installed van on 2026-10-16 (front up gives positive pitch, left up gives positive roll), and the owner reported that the LEVELLING page then points to the correct wheels. The sensor-position assumption, suspension/tire effects, and the accuracy of the lift amounts have not been measured.
 
@@ -26,7 +26,7 @@ An initial ILI9341 GRAM readback screenshot attempt produced an all-zero BMP, an
 
 The firmware directory contains `ESP32_GENERIC_S3-20260824-v1.29.0.bin`. On 2026-10-15 the connected board reported `sys.implementation` as MicroPython 1.29.0, build `ESP32_GENERIC_S3`, machine "Generic ESP32S3 module with ESP32-S3", `.mpy` format 6.3, and about 157 KB free heap after interrupting the app. That matches the version of the image; whether this exact file was flashed is not recorded.
 
-The owner's 3D-printed case covers roughly the top 9 pixel rows of the display (estimated from a photo on 2026-10-15); the sides and bottom were reported as unobstructed. `SCREEN_TOP_INSET` in `src/config.py` moves the top of the UI below that edge.
+The owner's 3D-printed case covers roughly the top 9 pixel rows of the display (estimated from a photo on 2026-10-15); the sides and bottom were reported as unobstructed. `SCREEN_TOP_INSET` in `esp32/src/config.py` moves the top of the UI below that edge.
 
 ## Sensor interface in source
 

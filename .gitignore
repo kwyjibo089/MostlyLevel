@@ -1,7 +1,18 @@
 __pycache__/
 .pytest_cache/
 .ruff_cache/
+.venv/
+.DS_Store
 # Images written by failing reference-image tests.
-tests/golden/_actual/
-# Compiled .mpy output of tools/build_mpy.sh.
-build/
+esp32/tests/golden/_actual/
+# Compiled .mpy output of esp32/tools/build_mpy.sh.
+esp32/build/
+
+# KiCad: per-user settings, backups, caches, locks, autorouter scratch files.
+hardware/*.kicad_prl
+hardware/*-backups/
+hardware/fp-info-cache
+hardware/*.lck
+hardware/temp-*.dsn
+# VS Code Local History extension.
+.history/

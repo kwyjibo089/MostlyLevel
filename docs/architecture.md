@@ -2,7 +2,7 @@
 
 ## Active application
 
-The active code is MicroPython in `src/`. MicroPython runs `main.py` at startup; it only imports `app.py` and calls `app.run()`, which runs `setup()` once and then `step()` every 30 ms. Errors in `step()` are logged and retried after 1 s with a full redraw; 5 in a row, or a failed `setup()`, hard-reset the board. Tests drive `setup()` and `step()` directly. `app.py` imports `ILI9341` from `ili9341.py` and `Graphics` plus RGB565 colors from `graphics.py`.
+The active code is MicroPython in `esp32/src/`. MicroPython runs `main.py` at startup; it only imports `app.py` and calls `app.run()`, which runs `setup()` once and then `step()` every 30 ms. Errors in `step()` are logged and retried after 1 s with a full redraw; 5 in a row, or a failed `setup()`, hard-reset the board. Tests drive `setup()` and `step()` directly. `app.py` imports `ILI9341` from `ili9341.py` and `Graphics` plus RGB565 colors from `graphics.py`.
 
 ### Display path
 
@@ -11,7 +11,7 @@ The active code is MicroPython in `src/`. MicroPython runs `main.py` at startup;
 3. The driver sends an ILI9341 initialization sequence, configures RGB565, and writes pixels using address windows and small repeated-color chunks rather than a full-screen framebuffer.
 4. `graphics.py` supplies pixel/line/rectangle operations and a small bitmap font with accented capitals (accents are drawn above the text line).
 
-Screen texts come from `i18n.t(key)`: `i18n.py` loads `lang_<code>.json` for the active language (saved in `/language.cfg`), and the language button on HORIZON (left of CALIBRATE) cycles through `LANGUAGES`, clears the cached HORIZON layers, and redraws. Internal names such as connection states and corner keys stay English; only the displayed text is looked up. Console messages stay English.
+Screen texts come from `i18n.t(key)`: `i18n.py` loads `lang_<code>.json` (kept in `shared/i18n/`, copied to the board's root) for the active language (saved in `/language.cfg`), and the language button on HORIZON (left of CALIBRATE) cycles through `LANGUAGES`, clears the cached HORIZON layers, and redraws. Internal names such as connection states and corner keys stay English; only the displayed text is looked up. Console messages stay English.
 5. `app.py` starts the BLE client and draws link status, pitch/roll readouts, the ATTITUDE page with two sub-pages chosen by tabs at its top: VAN, two tilting views of the van (from behind, tilting with roll, and from the right, tilting with pitch, each on fixed level ground), and HORIZON, a moving sky/ground virtual horizon with pitch ladder and curved scale (kept as tiled bitmaps) and the van seen from behind as a fixed symbol (`vans.py`: the shapes from `van_shapes.py` are rotated with integer maths about the lower wheel and filled with `framebuf.poly()`/`ellipse()` into a reused 4-bit `compositor.Bitmap`; an unchanged tilt reuses the picture). There is no compass in the display.
 
 `app.py` provides `save_screenshot(path)`, which redraws the current page and last rendered values into an 8-row RGB565 tile buffer and streams a 24-bit BMP to the ESP32 filesystem. It avoids a full-screen allocation and does not read from display GRAM. Interrupt the app in the REPL and call `save_screenshot("/screenshot.bmp")`, then copy the file with `mpremote fs cp :screenshot.bmp ./screenshot.bmp`.
@@ -29,8 +29,8 @@ The decoder checks length and the first two bytes but has no checksum validation
 
 ## Reference implementation boundary
 
-`reference/esp32_s3_es3c28p/` is a separate ESP-IDF BSP with C source, component metadata, and headers for display, touch, LVGL, audio, and storage. No top-level ESP-IDF project configuration or integration with `src/` is present. Its documentation and code can inform investigation but do not establish active application behavior or the exact physical hardware.
+`esp32/reference/esp32_s3_es3c28p/` is a separate ESP-IDF BSP with C source, component metadata, and headers for display, touch, LVGL, audio, and storage. No top-level ESP-IDF project configuration or integration with `esp32/src/` is present. Its documentation and code can inform investigation but do not establish active application behavior or the exact physical hardware.
 
 ## Configuration and verification gaps
 
-`src/config.py` centralizes sensor identity and protocol assumptions, axis mapping, vehicle geometry, display timing, and LCD/touch pin assignments. The sensor packet decoder and display algorithms remain in their respective modules. There is no top-level dependency manifest, deployment script, build configuration, or documented test procedure. The firmware filename identifies an ESP32_GENERIC_S3 MicroPython image, but does not establish the currently deployed firmware or process used to install it. See `hardware.md` for physical questions and `decisions.md` for current choices and unresolved items.
+`esp32/src/config.py` centralizes sensor identity and protocol assumptions, axis mapping, vehicle geometry, display timing, and LCD/touch pin assignments. The sensor packet decoder and display algorithms remain in their respective modules. There is no top-level dependency manifest, deployment script, build configuration, or documented test procedure. The firmware filename identifies an ESP32_GENERIC_S3 MicroPython image, but does not establish the currently deployed firmware or process used to install it. See `hardware.md` for physical questions and `decisions.md` for current choices and unresolved items.

@@ -1,6 +1,6 @@
 # MostlyLevel
 
-[![CI](https://github.com/kwyjibo089/MostlyLevel/actions/workflows/ci.yml/badge.svg)](https://github.com/kwyjibo089/MostlyLevel/actions/workflows/ci.yml)
+[![esp32](https://github.com/kwyjibo089/MostlyLevel/actions/workflows/esp32.yml/badge.svg)](https://github.com/kwyjibo089/MostlyLevel/actions/workflows/esp32.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 **A touchscreen levelling display for campervans.** A small ESP32-S3 display reads a Bluetooth tilt sensor mounted in the van and shows, live, how the van is tilted and how much to lift each wheel to get it level.
@@ -49,8 +49,8 @@
 | Part | What is used | Notes |
 | --- | --- | --- |
 | Display board | ESP32-S3 2.8" display board, ES3C28P family | 240 × 320 ILI9341 IPS display on SPI, capacitive touch on I2C. Vendor documentation: [lcdwiki 2.8inch ESP32-S3 Display](https://www.lcdwiki.com/2.8inch_ESP32-S3_Display). |
-| Firmware | MicroPython 1.29.0, `ESP32_GENERIC_S3` | The image in `firmware/` is byte-identical to the official download. |
-| Tilt sensor | WT901BLE67-style BLE inclinometer | Sends attitude notifications over Bluetooth LE; battery powered. Configured by its BLE address in `src/config.py`. |
+| Firmware | MicroPython 1.29.0, `ESP32_GENERIC_S3` | The image in `esp32/firmware/` is byte-identical to the official download. |
+| Tilt sensor | WT901BLE67-style BLE inclinometer | Sends attitude notifications over Bluetooth LE; battery powered. Configured by its BLE address in `esp32/src/config.py`. |
 | Power | USB-C, 5 V | The board also has a Li-Po connector with charger (not used by the app). |
 
 **Pin assignments** (from the vendor's board-support package, matching the app):
@@ -75,8 +75,8 @@ FT5x06 touch ──I2C──▶ touch.py ──taps, long presses─────
 
 - `main.py` imports `app.py` and calls `app.run()`: `setup()` once, then `step()` in a loop. BLE callbacks only store the latest sample; all drawing happens in `step()`.
 - Pages are recorded as filled rectangles (plus small bitmaps for pictures such as the vans and the arc), composited into a 240 × 40 strip buffer, and sent strip by strip. Strips whose content did not change are skipped.
-- The vans are vector shapes generated on the desktop (`tools/make_vans.py` → `src/van_shapes.py`) and rotated on the board with integer maths, then filled with `framebuf.poly()`.
-- Screen texts come from `src/lang_<code>.json`; only the active language is kept in memory.
+- The vans are vector shapes generated on the desktop (`esp32/tools/make_vans.py` → `esp32/src/van_shapes.py`) and rotated on the board with integer maths, then filled with `framebuf.poly()`.
+- Screen texts come from `shared/i18n/lang_<code>.json`; only the active language is kept in memory.
 
 More: [docs/architecture.md](docs/architecture.md) and the decision log in [docs/decisions.md](docs/decisions.md).
 
@@ -84,9 +84,10 @@ More: [docs/architecture.md](docs/architecture.md) and the decision log in [docs
 
 You need the display board, a WT901BLE67-style sensor, a USB-C cable, and Python 3 on your computer.
 
-1. **Install the tools** (in the repository root):
+1. **Install the tools** (in the `esp32/` folder; all commands below run from there):
 
    ```bash
+   cd esp32
    python3 -m venv .venv
    .venv/bin/python -m pip install -r requirements-dev.txt
    ```
@@ -111,7 +112,7 @@ You need the display board, a WT901BLE67-style sensor, a USB-C cable, and Python
 
 5. **Mount and calibrate**: fix the sensor in the van, level the van with a trusted spirit level, and hold **CALIBRATE** for one second.
 
-`tools/deploy.sh -h` lists the options (upload sources instead of `.mpy`, choose a port, open the REPL, and so on).
+`esp32/tools/deploy.sh -h` lists the options (upload sources instead of `.mpy`, choose a port, open the REPL, and so on).
 
 ## Using MostlyLevel
 
@@ -136,7 +137,7 @@ You need the display board, a WT901BLE67-style sensor, a USB-C cable, and Python
 
 ## Configuration
 
-All adjustable values live in [`src/config.py`](src/config.py), with comments saying which are tested and which are assumptions. The ones you are most likely to change:
+All adjustable values live in [`esp32/src/config.py`](src/config.py), with comments saying which are tested and which are assumptions. The ones you are most likely to change:
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
@@ -149,20 +150,22 @@ All adjustable values live in [`src/config.py`](src/config.py), with comments sa
 | `LANGUAGES`, `DEFAULT_LANGUAGE` | en, de, fr, es; en | Languages offered by the language button |
 | `LONG_PRESS_MS` | 1000 | Hold time for CALIBRATE and the language button |
 
-Screen texts are in `src/lang_en.json`, `lang_de.json`, `lang_fr.json`, and `lang_es.json`. To add a language, copy `lang_en.json` to `lang_<code>.json`, translate it (in uppercase), and add the code to `LANGUAGES`; the tests check that every text fits its space and that the font has every character.
+Screen texts are in `shared/i18n/lang_en.json`, `lang_de.json`, `lang_fr.json`, and `lang_es.json` (shared with the planned Android app). To add a language, copy `lang_en.json` to `lang_<code>.json`, translate it (in uppercase), and add the code to `LANGUAGES`; the tests check that every text fits its space and that the font has every character.
 
 ## Development
+
+Run these from the `esp32/` folder:
 
 ```bash
 tools/test.sh                 # ruff, MicroPython compile check (mpy-cross), pytest
 tools/test.sh --update-golden # after an intentional visual change; review the image diff
-tools/screenshot.sh [name]    # capture the running display as assets/<name>.png
+tools/screenshot.sh [name]    # capture the running display as ../assets/<name>.png
 tools/make_vans.py            # regenerate src/van_shapes.py after editing the van shapes
-tools/readme_images.sh        # refresh the README images from tests/golden/
+tools/readme_images.sh        # refresh ../assets/ from tests/golden/
 ```
 
-- **Tests** run the MicroPython sources under desktop Python with fake hardware (`tests/fakes/`: `machine`, `bluetooth`, `framebuf`, and an ILI9341 panel model that decodes the SPI commands into pixels). They cover the BLE client and decoder, levelling maths, touch, rendering invariants (composited output equals direct drawing), recovery logic, and reference images of every page and language in `tests/golden/`. Passing tests show behaviour against the fakes, not on hardware.
-- **CI** (GitHub Actions) runs `tools/test.sh` for every pull request and push to `main`, then builds the `.mpy` bundle as a downloadable artifact. `main` is protected: changes go through pull requests.
+- **Tests** run the MicroPython sources under desktop Python with fake hardware (`esp32/tests/fakes/`: `machine`, `bluetooth`, `framebuf`, and an ILI9341 panel model that decodes the SPI commands into pixels). They cover the BLE client and decoder, levelling maths, touch, rendering invariants (composited output equals direct drawing), recovery logic, and reference images of every page and language in `esp32/tests/golden/`. Passing tests show behaviour against the fakes, not on hardware.
+- **CI** (GitHub Actions, `.github/workflows/esp32.yml`) runs `esp32/tools/test.sh` for every pull request and push to `main`, then builds the `.mpy` bundle as a downloadable artifact. `main` is protected: changes go through pull requests.
 - **Records**: [CHANGELOG.md](CHANGELOG.md) for changes, [docs/decisions.md](docs/decisions.md) for design decisions with their measurements.
 
 ## What is verified
@@ -195,7 +198,7 @@ Facts relevant to designing a case. They come from the vendor documentation unle
 
 Things to settle before selling MostlyLevel devices (a technical checklist, not legal advice):
 
-- **Per-device setup**: the sensor's BLE address, van geometry, and sensor orientation are currently set in `src/config.py`. Customers need an on-device setup flow: pairing by scanning for the sensor, entering the wheelbase and track widths, and choosing the mounting direction.
+- **Per-device setup**: the sensor's BLE address, van geometry, and sensor orientation are currently set in `esp32/src/config.py`. Customers need an on-device setup flow: pairing by scanning for the sensor, entering the wheelbase and track widths, and choosing the mounting direction.
 - **Measured accuracy**: check the lift estimates against real wedge heights, and the battery bands at more levels.
 - **Long-run test**: an overnight run with the real sensor.
 - **Licences and notices**: the device firmware contains MicroPython (MIT), components under Apache-2.0, and Adafruit-derived code under BSD. Their notices must ship with each device, for example in the printed manual or on the product page; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
@@ -206,21 +209,26 @@ Things to settle before selling MostlyLevel devices (a technical checklist, not 
 
 | Path | Contents |
 | --- | --- |
-| `src/main.py`, `src/app.py` | Entry point; the app: pages, touch handling, main loop |
-| `src/ble_read.py` | BLE client, packet decoder, reconnection and recovery |
-| `src/vans.py`, `src/van_shapes.py` | Tilted van drawing; generated van shapes |
-| `src/compositor.py` | Off-screen strip compositing and bitmaps |
-| `src/graphics.py`, `src/ili9341.py`, `src/touch.py` | Drawing helpers and font, display driver, touch reader |
-| `src/i18n.py`, `src/lang_*.json` | Language loading and the screen texts |
-| `src/config.py` | All settings |
-| `src/screenshot.py`, `src/ble_scan.py` | Screenshot writer; standalone BLE scan diagnostic |
-| `tests/` | Desktop tests, fake hardware, reference images |
-| `tools/` | Deploy, build, test, screenshot, van-shape, and README-image scripts |
-| `firmware/` | The MicroPython firmware image and its licence |
-| `reference/esp32_s3_es3c28p/` | The vendor's ESP-IDF board-support package, kept as reference only (not used by the app) |
+| `esp32/src/main.py`, `esp32/src/app.py` | Entry point; the app: pages, touch handling, main loop |
+| `esp32/src/ble_read.py` | BLE client, packet decoder, reconnection and recovery |
+| `esp32/src/vans.py`, `esp32/src/van_shapes.py` | Tilted van drawing; generated van shapes |
+| `esp32/src/compositor.py` | Off-screen strip compositing and bitmaps |
+| `esp32/src/graphics.py`, `esp32/src/ili9341.py`, `esp32/src/touch.py` | Drawing helpers and font, display driver, touch reader |
+| `esp32/src/i18n.py` | Language loading |
+| `esp32/src/config.py` | All settings |
+| `esp32/src/screenshot.py`, `esp32/src/ble_scan.py` | Screenshot writer; standalone BLE scan diagnostic |
+| `esp32/tests/` | Desktop tests, fake hardware, reference images |
+| `esp32/tools/` | Deploy, build, test, screenshot, van-shape, and README-image scripts |
+| `esp32/firmware/` | The MicroPython firmware image and its licence |
+| `esp32/reference/esp32_s3_es3c28p/` | The vendor's ESP-IDF board-support package, kept as reference only (not used by the app) |
+| `esp32/pyproject.toml`, `esp32/requirements-dev.txt` | Desktop tooling: pytest, ruff, mpy-cross |
+| `shared/i18n/lang_*.json` | Screen texts, shared by the ESP32 app and the planned Android app |
+| `mobile/` | Planned: the Android app (React Native) with the same functionality |
+| `hardware/` | KiCad project for the custom PCB: schematic, layout, footprints, BOM, fabrication files, vendor data |
+| `case/` | Enclosure design files (empty so far) |
 | `docs/` | Architecture, hardware, and decision records |
 | `assets/` | README images and screenshots |
 
 ## License
 
-MostlyLevel's own code is licensed under the [MIT License](LICENSE). The ILI9341 initialisation values and the bitmap font come from Adafruit's BSD-licensed libraries, the firmware image is MicroPython (MIT, with bundled components under their own licences), and `reference/` is Espressif's Apache-2.0 board-support code. Details and the required notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+MostlyLevel's own code is licensed under the [MIT License](LICENSE). The ILI9341 initialisation values and the bitmap font come from Adafruit's BSD-licensed libraries, the firmware image is MicroPython (MIT, with bundled components under their own licences), and `esp32/reference/` is Espressif's Apache-2.0 board-support code. Details and the required notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

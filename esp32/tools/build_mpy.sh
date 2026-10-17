@@ -5,7 +5,7 @@
 #   main.py    MicroPython only runs main.py from source at startup.
 #   config.py  kept as source so settings stay readable and editable.
 #   ble_scan.py  standalone diagnostic, not part of the app.
-# The screen text files (lang_*.json) are copied as they are.
+# The screen text files (shared/i18n/lang_*.json) are copied as they are.
 # Precompiled modules import faster (~0.2 s instead of ~0.7 s on the board)
 # and avoid compiling app.py there; steady-state RAM is about the same.
 #
@@ -46,6 +46,6 @@ for file in "$repo_root"/src/*.py; do
     esac
 done
 
-cp "$repo_root"/src/lang_*.json "$build_dir/"
+cp "$repo_root"/../shared/i18n/lang_*.json "$build_dir/"
 
 echo "Built $(ls "$build_dir" | wc -l) files in ${build_dir#"$repo_root"/} with $("$python" -m mpy_cross --version)"
