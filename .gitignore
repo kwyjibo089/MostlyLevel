@@ -16,3 +16,6 @@ hardware/*.lck
 hardware/temp-*.dsn
 # VS Code Local History extension.
 .history/
+# Vendor downloads without a stated redistribution licence; kept locally only.
+hardware/vendor/*.zip
+hardware/vendor/*.pdf
