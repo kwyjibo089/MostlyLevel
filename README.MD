@@ -44,6 +44,10 @@
 - **Robust for long runs**: automatic Bluetooth reconnection and recovery, and the app restarts the board after repeated errors instead of freezing with a stale "level" picture.
 - **Flicker-free drawing**: pages are composited off-screen in strips and sent to the display in one transfer per strip.
 
+### Android app
+
+An Android app in [`mobile/`](mobile/README.md) does the same job on a phone: it connects directly to the sensor and shows the same pages, with phone-sized graphics, a choice of camper type and colour, and settings for the sensor, the dimensions, and the language. It is a first version; its levelling maths and sensor decoding are tested against the ESP32 code. The sensor accepts one connection at a time, so the phone and the display cannot both be connected.
+
 ## Hardware
 
 | Part | What is used | Notes |
@@ -222,8 +226,10 @@ Things to settle before selling MostlyLevel devices (a technical checklist, not 
 | `esp32/firmware/` | The MicroPython firmware image and its licence |
 | `esp32/reference/esp32_s3_es3c28p/` | The vendor's ESP-IDF board-support package, kept as reference only (not used by the app) |
 | `esp32/pyproject.toml`, `esp32/requirements-dev.txt` | Desktop tooling: pytest, ruff, mpy-cross |
-| `shared/i18n/lang_*.json` | Screen texts, shared by the ESP32 app and the planned Android app |
-| `mobile/` | Planned: the Android app (React Native) with the same functionality |
+| `esp32/tools/make_fixtures.py` | Writes `shared/fixtures/`: the ESP32 logic's results that the Android app is tested against |
+| `shared/i18n/lang_*.json` | The ESP32's screen texts (all caps for its font) |
+| `shared/fixtures/` | Reference results of the ESP32 decoder and levelling maths, generated; see `mobile/README.md` |
+| `mobile/` | The Android app (React Native, Expo) with the same functionality as the display; see [mobile/README.md](mobile/README.md) |
 | `hardware/` | KiCad project for the custom PCB: schematic, layout, footprints, BOM, fabrication files, vendor data |
 | `case/` | Enclosure design files (empty so far) |
 | `docs/` | Architecture, hardware, and decision records |

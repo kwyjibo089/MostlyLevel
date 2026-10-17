@@ -199,3 +199,11 @@ def test_van_shapes_are_up_to_date():
         [sys.executable, str(TOOLS / "make_vans.py"), "--check"], capture_output=True, text=True
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_shared_fixtures_are_up_to_date():
+    # The mobile app's tests compare its logic against these files.
+    result = subprocess.run(
+        [sys.executable, str(TOOLS / "make_fixtures.py"), "--check"], capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr

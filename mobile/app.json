@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "MostlyLevel",
+    "slug": "mostlylevel",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0E1116",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "io.github.kwyjibo089.mostlylevel"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      [
+        "react-native-ble-manager",
+        {
+          "neverForLocation": true,
+          "isBleRequired": true
+        }
+      ]
+    ],
+    "scheme": "mostlylevel",
+    "backgroundColor": "#0E1116",
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
