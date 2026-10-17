@@ -28,6 +28,15 @@
           "neverForLocation": true,
           "isBleRequired": true
         }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 220,
+          "resizeMode": "contain",
+          "backgroundColor": "#0E1116"
+        }
       ]
     ],
     "scheme": "mostlylevel",
