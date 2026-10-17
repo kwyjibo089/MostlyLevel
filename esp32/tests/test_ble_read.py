@@ -96,6 +96,22 @@ def test_start_scans_for_sensor(client):
     assert client.state == "SCANNING"
 
 
+def test_scan_leaves_the_radio_idle_between_windows(client):
+    # Scanning without pause starved USB; see SENSOR_SCAN_* in config.py.
+    _, duration_ms, interval_us, window_us, active = scans_started(SensorSimulator().ble)[0]
+    assert duration_ms == 15000
+    assert window_us < interval_us
+    assert window_us / interval_us <= 0.3
+    assert active is False
+
+
+def test_other_devices_sharing_the_first_byte_are_ignored(client):
+    sim = SensorSimulator()
+    lookalike = bytes((0xF0,)) + bytes(5)  # Same first byte as the sensor's address.
+    sim.advertise(lookalike)
+    assert client.state == "SCANNING"
+
+
 def test_other_devices_are_ignored(client):
     sim = SensorSimulator()
     sim.advertise(b"\x01\x02\x03\x04\x05\x06")

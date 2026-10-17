@@ -4,6 +4,7 @@ Notable project changes are recorded here. This file was introduced with the ini
 
 ## Unreleased
 
+- ESP32 BLE scanning listens 30 ms of every 100 ms, passively, instead of without pause, and rejects other devices' advertisements early. While the sensor was unavailable, the continuous scan left the board unable to answer USB, so deploys failed. Scan settings are now in `config.py` (`SENSOR_SCAN_*`, untested values).
 - Android app icon (owner's choice from four concepts): the camper seen from behind in an attitude indicator, with a level vial centred in the ground; adaptive layers with a one-colour layer for themed icons, and the same motif on the splash screen. Source: `mobile/scripts/app_icon.py`.
 - Android app: detailed camper drawings for all five types (side, rear, and top views) replace the simple shapes, with California- and Ducato-like model cues. Generated from `mobile/scripts/van_drawings.py` into `mobile/src/vanArt.ts`; the ground shadow no longer tilts with the van.
 - Android app: the phone's own accelerometer can replace the WT901 (Settings › Sensor source). The phone lies flat, screen up, top toward the front; it has its own calibration. Choosing it disconnects the WT901 so the ESP32 display can use the sensor.

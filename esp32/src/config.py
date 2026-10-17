@@ -7,6 +7,14 @@ SENSOR_WRITE_UUID = "0000ffe9-0000-1000-8000-00805f9a34fb"
 SENSOR_NOTIFY_UUID = "0000ffe4-0000-1000-8000-00805f9a34fb"
 SENSOR_CCCD_HANDLE = 16  # Candidate handle; not yet derived from discovery.
 SENSOR_POWER_REGISTER = 0x64
+# Scanning for the sensor: listen 30 ms of every 100 ms, passively (no scan
+# requests). Scanning all the time (window = interval) left the board unable
+# to answer USB while the sensor was unavailable, so deploys failed
+# (2026-10-17). Untested values.
+SENSOR_SCAN_DURATION_MS = 15000
+SENSOR_SCAN_INTERVAL_US = 100000
+SENSOR_SCAN_WINDOW_US = 30000
+SENSOR_SCAN_ACTIVE = False
 SENSOR_POWER_READ_COMMAND = bytes((0xFF, 0xAA, 0x27, SENSOR_POWER_REGISTER, 0x00))
 
 # Fixed assumptions used by the current sensor packet decoder.
