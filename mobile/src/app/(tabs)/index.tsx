@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { CAMPERS, paintFor } from '../../campers';
+import { CAMPERS, colourHex } from '../../campers';
 import { CalibrateButton } from '../../components/CalibrateButton';
 import { Toast } from '../../components/Chrome';
 import { HorizonView } from '../../components/HorizonView';
@@ -26,7 +26,7 @@ export default function AttitudePage() {
   useEffect(() => () => clearTimeout(toastTimer.current), []);
 
   const type = CAMPERS[settings.camper];
-  const paint = paintFor(settings.colour);
+  const colour = colourHex(settings.colour);
 
   const showToast = (key: TextKey, ok: boolean) => {
     clearTimeout(toastTimer.current);
@@ -62,12 +62,12 @@ export default function AttitudePage() {
       />
       {view === 'van' ? (
         <>
-          <VanScene view="rear" type={type} paint={paint} angle={attitude?.roll ?? null} drawnAngle={drawn.roll} t={t} />
-          <VanScene view="side" type={type} paint={paint} angle={attitude?.pitch ?? null} drawnAngle={drawn.pitch} t={t} />
+          <VanScene view="rear" type={type} colour={colour} angle={attitude?.roll ?? null} drawnAngle={drawn.roll} t={t} />
+          <VanScene view="side" type={type} colour={colour} angle={attitude?.pitch ?? null} drawnAngle={drawn.pitch} t={t} />
         </>
       ) : (
         <>
-          <HorizonView pitch={drawn.pitch} roll={drawn.roll} type={type} paint={paint} />
+          <HorizonView pitch={drawn.pitch} roll={drawn.roll} type={type} colour={colour} />
           <View style={styles.tiles}>
             <ReadoutTile label={t('pitch')} angle={attitude?.pitch ?? null} hint={hintFor('side', attitude?.pitch ?? null, t)} decimal={t('decimal')} format={(v) => formatSigned(v, t)} />
             <ReadoutTile label={t('roll')} angle={attitude?.roll ?? null} hint={hintFor('rear', attitude?.roll ?? null, t)} decimal={t('decimal')} format={(v) => formatSigned(v, t)} />
