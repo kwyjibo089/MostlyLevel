@@ -150,7 +150,7 @@ All adjustable values live in [`esp32/src/config.py`](src/config.py), with comme
 | `DISPLAY_PITCH_SIGN`, `DISPLAY_ROLL_SIGN` | 1.0 | Flip if the sensor is mounted the other way round |
 | `LEVEL_FRAME_THRESHOLD_DEG`, `LEVEL_FRAME_RELEASE_THRESHOLD_DEG` | 0.5, 0.7 | When the green frame turns on and off |
 | `VAN_TILT_GAIN`, `VAN_TILT_MAX_DEG` | 3.0, 20 | Exaggeration of the VAN view's tilt |
-| `SCREEN_TOP_INSET` | 10 | Rows hidden by the case at the top of the display |
+| `SCREEN_TOP_INSET` | 0 | Rows hidden by the case at the top of the display (the first case needed 10) |
 | `LANGUAGES`, `DEFAULT_LANGUAGE` | en, de, fr, es; en | Languages offered by the language button |
 | `LONG_PRESS_MS` | 1000 | Hold time for CALIBRATE and the language button |
 
@@ -192,7 +192,7 @@ Facts relevant to designing a case. They come from the vendor documentation unle
 
 - **Board size**: 50.0 × 86.0 mm, 10.6 mm thick with the touch panel (9.1 mm without). Weight about 111 g. Four mounting holes, one in each corner.
 - **Display**: 2.8" IPS, 240 × 320 px, used in **portrait** orientation with the USB-C port at the **bottom** edge.
-- **Visible area**: the UI uses the display edge to edge, so the whole display area should stay visible and touchable. The owner's current printed case hides about the top 9 pixel rows, which the app compensates for with `SCREEN_TOP_INSET` (10). A case that shows the full display lets this be set to 0.
+- **Visible area**: the UI uses the display edge to edge, so the whole display area should stay visible and touchable. The first printed case hid about the top 9 pixel rows (`SCREEN_TOP_INSET` was 10); the redesigned case (2026-10-18) leaves the whole display visible, so the inset is 0. A case that covers part of the display again needs `SCREEN_TOP_INSET` set to the hidden rows.
 - **Touch**: capacitive; the cover must not press on the glass, and conductive material over the panel affects touch.
 - **Radio**: the ESP32-S3 talks to the sensor over Bluetooth; the vendor drawing shows an antenna area at the top edge of the board, so avoid metal there.
 - **Ports and power**: USB-C (5 V) at the bottom. Typical consumption about 140 mA with the display on.
