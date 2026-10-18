@@ -26,7 +26,7 @@ An initial ILI9341 GRAM readback screenshot attempt produced an all-zero BMP, an
 
 The firmware directory contains `ESP32_GENERIC_S3-20260824-v1.29.0.bin`. On 2026-10-15 the connected board reported `sys.implementation` as MicroPython 1.29.0, build `ESP32_GENERIC_S3`, machine "Generic ESP32S3 module with ESP32-S3", `.mpy` format 6.3, and about 157 KB free heap after interrupting the app. That matches the version of the image; whether this exact file was flashed is not recorded.
 
-The owner's first 3D-printed case covered roughly the top 9 pixel rows of the display (estimated from a photo on 2026-10-15), so `SCREEN_TOP_INSET` in `esp32/src/config.py` moved the top of the UI 10 rows down. The redesigned case (owner, 2026-10-18) no longer covers the display, so the inset is 0; this is not yet checked on the device with the new case.
+The owner's first 3D-printed case covered roughly the top 9 pixel rows of the display (estimated from a photo on 2026-10-15), so `SCREEN_TOP_INSET` in `esp32/src/config.py` moved the top of the UI 10 rows down. The redesigned case (owner, 2026-10-18) no longer covers the display, so the inset is 0; the owner confirmed the layout on the device with the new case on 2026-10-18.
 
 ## Sensor interface in source
 
