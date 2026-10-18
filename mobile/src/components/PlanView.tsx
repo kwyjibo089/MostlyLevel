@@ -4,17 +4,19 @@
  * lift; 4 CORNERS shows all four values, like the ESP32 page.
  */
 
-import Svg, { Circle, G, Path, Rect, Text as SvgText } from 'react-native-svg';
+import Svg, { Circle, G, Rect, Text as SvgText } from 'react-native-svg';
 
-import { CamperType, Paint } from '../campers';
+import type { CamperType } from '../campers';
 import { NO_WEDGE_NEEDED_THRESHOLD_CM } from '../config';
 import { formatCm, Translate } from '../i18n';
 import { Corner, CornerLifts } from '../levelling';
 import { colours, fonts } from '../theme';
+import { Art, ArtDefs } from './VanArt';
 
 type Props = {
   type: CamperType;
-  paint: Paint;
+  /** Body colour. */
+  colour: string;
   lifts: CornerLifts | null;
   mode: 'wedges' | 'corners';
   /** 2 WEDGES ranking, or 'level'; null without data. */
@@ -22,16 +24,16 @@ type Props = {
   t: Translate;
 };
 
-export function PlanView({ type, paint, lifts, mode, advice, t }: Props) {
-  const s = 3.7;
-  const bh = type.length * s;
-  const bw = type.width * 4.6;
+export function PlanView({ type, colour, lifts, mode, advice, t }: Props) {
+  const { meta } = type;
+  const s = 0.37; // px per cm
+  const bh = meta.length * s;
+  const bw = meta.width * s;
   const bx = 178 - bw / 2;
   const by = 44 + (270 - bh) / 2;
-  const wh = Math.round(type.wheelRadius * 2 * s + 6);
-  const frontY = by + (type.length - type.axles[1]) * s;
-  const rearY = by + (type.length - type.axles[0]) * s;
-  const ws = by + type.windscreen * s;
+  const wh = Math.round(meta.wheel * 2 * s + 6);
+  const frontY = by + (meta.length - meta.axles[1]) * s;
+  const rearY = by + (meta.length - meta.axles[0]) * s;
   const level = advice === 'level';
   const ranked: Corner[] = Array.isArray(advice) ? advice : [];
 
@@ -75,16 +77,9 @@ export function PlanView({ type, paint, lifts, mode, advice, t }: Props) {
     );
   };
 
-  const screen =
-    `M${bx + 6} ${ws} Q178 ${ws - 7} ${bx + bw - 6} ${ws} ` +
-    `L${bx + bw - 10} ${ws + 15} Q178 ${ws + 9} ${bx + 10} ${ws + 15} Z`;
-  const my = ws + 10;
-  const mirrors = `M${bx - 7} ${my} h7 v6 h-7 Z M${bx + bw} ${my} h7 v6 h-7 Z`;
-  const roofY = by + bh * 0.45;
-  const roof = `M${178 - bw * 0.22} ${roofY} h${bw * 0.44} v${bw * 0.34} h${-bw * 0.44} Z`;
-
   return (
     <Svg width="100%" height="100%" viewBox="0 0 356 340" accessibilityLabel="Camper seen from above with lift per wheel">
+      <ArtDefs />
       <SvgText x={178} y={24} fill={colours.muted} fontSize={13} fontFamily={fonts.medium} textAnchor="middle">
         {`▲ ${t('front')}`}
       </SvgText>
@@ -92,10 +87,9 @@ export function PlanView({ type, paint, lifts, mode, advice, t }: Props) {
       {corner('front_right', false, frontY)}
       {corner('rear_left', true, rearY)}
       {corner('rear_right', false, rearY)}
-      <Rect x={bx} y={by} width={bw} height={bh} rx={Math.min(24, bw * 0.22)} fill={paint.body} stroke={paint.planEdge} strokeWidth={1} />
-      <Path d={screen} fill="#26313C" />
-      <Path d={mirrors} fill="#2B3036" />
-      <Path d={roof} fill={paint.roof} />
+      <G transform={`translate(178 ${by}) scale(${s})`}>
+        <Art shapes={type.top} colour={colour} />
+      </G>
     </Svg>
   );
 }

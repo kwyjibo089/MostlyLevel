@@ -6,8 +6,8 @@ import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg from 'react-native-svg';
 
-import { BODY_COLOURS, CAMPERS, CamperKey, CAMPER_KEYS, paintFor } from '../campers';
-import { SideCamper } from '../components/CamperDrawing';
+import { BODY_COLOURS, CAMPERS, CamperKey, CAMPER_KEYS, colourHex } from '../campers';
+import { Art, ArtDefs } from '../components/VanArt';
 import { LANGUAGES, SENSOR_NAME_PREFIX } from '../config';
 import { translator, TextKey } from '../i18n';
 import type { Dimensions } from '../levelling';
@@ -21,7 +21,7 @@ const SCAN_SECONDS = 10;
 export default function SettingsScreen() {
   const { settings, update, t } = useSettings();
   const insets = useSafeAreaInsets();
-  const paint = paintFor(settings.colour);
+  const colour = colourHex(settings.colour);
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
@@ -81,8 +81,9 @@ export default function SettingsScreen() {
                   accessibilityRole="radio"
                   accessibilityState={{ selected }}
                 >
-                  <Svg width="100%" height={58} viewBox={`-1 ${-(type.height + 1.5)} ${type.length + 2} ${type.height + 2}`}>
-                    <SideCamper type={type} paint={paint} details={false} />
+                  <Svg width="100%" height={58} viewBox={`-12 ${-(type.meta.height + 8)} ${type.meta.length + 24} ${type.meta.height + 18}`}>
+                    <ArtDefs />
+                    <Art shapes={type.side} colour={colour} />
                   </Svg>
                   <Text style={styles.cardTitle}>{t(`camper_${key}` as TextKey)}</Text>
                   <Text style={styles.cardHint}>{t(`camper_${key}_hint` as TextKey)}</Text>
