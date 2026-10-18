@@ -8,9 +8,9 @@ SENSOR_NOTIFY_UUID = "0000ffe4-0000-1000-8000-00805f9a34fb"
 SENSOR_CCCD_HANDLE = 16  # Candidate handle; not yet derived from discovery.
 SENSOR_POWER_REGISTER = 0x64
 # Scanning for the sensor: listen 30 ms of every 100 ms, passively (no scan
-# requests). Scanning all the time (window = interval) left the board unable
-# to answer USB while the sensor was unavailable, so deploys failed
-# (2026-10-17). Untested values.
+# requests). Meant to keep USB responsive while the sensor is unavailable,
+# but the board still cannot be reached over USB then (owner, 2026-10-18;
+# cause unknown): deploy while the display is connected to the sensor.
 SENSOR_SCAN_DURATION_MS = 15000
 SENSOR_SCAN_INTERVAL_US = 100000
 SENSOR_SCAN_WINDOW_US = 30000
@@ -75,8 +75,8 @@ VAN_TILT_MAX_DEG = 20.0
 # Rows at the top of the LCD hidden by the case. Header, navigation, and the
 # top of each page move down by this amount; bottom and side positions stay
 # fixed. The first printed case hid ~9 rows (10 here); the redesigned case
-# (2026-10-18) leaves the whole display visible, so 0. Not yet checked on the
-# device with the new case.
+# (2026-10-18) leaves the whole display visible, so 0; confirmed on the device
+# by the owner the same day.
 SCREEN_TOP_INSET = 0
 LEVEL_FRAME_THRESHOLD_DEG = 0.5
 LEVEL_FRAME_RELEASE_THRESHOLD_DEG = 0.7
