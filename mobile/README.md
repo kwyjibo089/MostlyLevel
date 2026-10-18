@@ -35,7 +35,7 @@ Differences from the ESP32, by design: the vans and horizon are smoothed between
 | `src/components/` | Drawings and UI pieces |
 | `src/i18n/` | Screen texts; mixed case, so separate from the ESP32's all-caps `shared/i18n/` |
 | `test/` | Jest tests: parity with the ESP32 fixtures, BLE client behaviour |
-| `scripts/make-icons.mjs` | Renders the app icon and splash PNGs in `assets/` (`node scripts/make-icons.mjs`) |
+| `scripts/app_icon.py`, `scripts/make-icons.mjs` | The app icon: `app_icon.py` writes its SVG layers to `assets/icon/`, `make-icons.mjs` renders the icon and splash PNGs in `assets/` (`python3 scripts/app_icon.py && node scripts/make-icons.mjs`) |
 
 ## Development
 
