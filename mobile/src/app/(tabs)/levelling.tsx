@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { CAMPERS, paintFor } from '../../campers';
+import { CAMPERS, colourHex } from '../../campers';
 import { PlanView } from '../../components/PlanView';
 import { Card, CheckIcon, Segmented } from '../../components/ui';
 import { useAttitude } from '../../hooks/useAttitude';
@@ -31,7 +31,7 @@ export default function LevellingPage() {
         onChange={setMode}
       />
       <Card style={styles.plan}>
-        <PlanView type={type} paint={paintFor(settings.colour)} lifts={lifts} mode={mode} advice={advice} t={t} />
+        <PlanView type={type} colour={colourHex(settings.colour)} lifts={lifts} mode={mode} advice={advice} t={t} />
       </Card>
       {mode === 'wedges' && advice === 'level' && (
         <Card style={styles.levelCard}>

@@ -28,7 +28,9 @@ Differences from the ESP32, by design: the vans and horizon are smoothed between
 | `src/sensor/bleManagerTransport.ts` | The transport on `react-native-ble-manager` |
 | `src/sensor/phone.ts` | The phone's accelerometer as attitude source: gravity to pitch/roll, low-pass filter |
 | `src/levelling.ts` | Axis mapping, level reference, corner lifts, wedge ranking, hysteresis, van tilt (port of `app.py`) |
-| `src/campers.ts` | Camper drawings (vector layers), typical dimensions, colours |
+| `src/campers.ts` | Camper types, typical dimensions, colours |
+| `src/vanArt.ts` | The camper drawings as data (side, rear, top), generated; drawn by `src/components/VanArt.tsx` |
+| `scripts/van_drawings.py`, `scripts/make_van_art.py` | The drawings (SVG in cm, built from shared parts) and the generator for `src/vanArt.ts` (`python3 scripts/make_van_art.py`) |
 | `src/app/` | Screens (Expo Router): Attitude, Levelling, Settings |
 | `src/components/` | Drawings and UI pieces |
 | `src/i18n/` | Screen texts; mixed case, so separate from the ESP32's all-caps `shared/i18n/` |

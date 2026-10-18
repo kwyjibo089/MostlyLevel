@@ -8,11 +8,11 @@
 import { StyleSheet, View } from 'react-native';
 import Svg, { G, Line, Path, Rect, Text as SvgText } from 'react-native-svg';
 
-import { CamperType, Paint } from '../campers';
+import type { CamperType } from '../campers';
 import { HORIZON_PIXELS_PER_DEGREE } from '../config';
 import { clamp } from '../levelling';
 import { colours, fonts } from '../theme';
-import { RearCamper } from './CamperDrawing';
+import { Art, ArtDefs } from './VanArt';
 
 const C = 170; // Centre of the 340 × 340 drawing.
 
@@ -27,13 +27,14 @@ const TICKS = [
 ];
 const LADDER = [20, 15, 10, 5, -5, -10, -15, -20];
 
-export function HorizonView({ pitch, roll, type, paint }: { pitch: number; roll: number; type: CamperType; paint: Paint }) {
+export function HorizonView({ pitch, roll, type, colour }: { pitch: number; roll: number; type: CamperType; colour: string }) {
   const rotation = -clamp(roll, -45, 45);
   const shift = clamp(pitch, -35, 35) * HORIZON_PIXELS_PER_DEGREE;
-  const symbolScale = 62 / type.height;
+  const symbolScale = 62 / type.meta.height;
   return (
     <View style={styles.frame}>
       <Svg width="100%" height="100%" viewBox="-9 -9 358 358" accessibilityLabel="Virtual horizon">
+        <ArtDefs />
         <G transform={`rotate(${rotation} ${C} ${C}) translate(0 ${shift})`}>
           <Rect x={-400} y={-600} width={1140} height={770} fill={colours.sky} />
           <Rect x={-400} y={C} width={1140} height={770} fill={colours.ground} />
@@ -66,7 +67,9 @@ export function HorizonView({ pitch, roll, type, paint }: { pitch: number; roll:
         <G transform={`rotate(${rotation} ${C} ${C})`}>
           <Path d="M170 46 L163 58 L177 58 Z" fill="#FFFFFF" />
         </G>
-        <RearCamper type={type} paint={paint} details={false} transform={`translate(${C} 200) scale(${symbolScale})`} />
+        <G transform={`translate(${C} 200) scale(${symbolScale})`}>
+          <Art shapes={type.rear} colour={colour} />
+        </G>
         <Path d="M170 204 L162 216 L178 216 Z" fill={colours.calibrate} />
       </Svg>
     </View>

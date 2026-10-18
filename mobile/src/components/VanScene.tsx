@@ -5,13 +5,13 @@
  */
 
 import { StyleSheet, Text, View } from 'react-native';
-import Svg, { Rect } from 'react-native-svg';
+import Svg, { G, Rect } from 'react-native-svg';
 
-import { CamperType, Paint } from '../campers';
+import type { CamperType } from '../campers';
 import { formatSigned, Translate } from '../i18n';
 import { axisLevel, vanTilt } from '../levelling';
 import { colours, fonts } from '../theme';
-import { RearCamper, SideCamper } from './CamperDrawing';
+import { Art, ArtDefs } from './VanArt';
 import { Card } from './ui';
 
 const SCENE_W = 356;
@@ -21,7 +21,8 @@ const GROUND_Y = 186;
 type Props = {
   view: 'rear' | 'side';
   type: CamperType;
-  paint: Paint;
+  /** Body colour. */
+  colour: string;
   /** True angle for the readout, null without data. */
   angle: number | null;
   /** Smoothed angle for the drawing. */
@@ -36,36 +37,27 @@ export function hintFor(view: 'rear' | 'side', angle: number | null, t: Translat
   return { text: t(angle > 0 ? 'left_high' : 'right_high'), level: false };
 }
 
-export function VanScene({ view, type, paint, angle, drawnAngle, t }: Props) {
+export function VanScene({ view, type, colour, angle, drawnAngle, t }: Props) {
   const hint = hintFor(view, angle, t);
   const groundLevel = angle !== null && axisLevel(angle);
-  let drawing;
+  const { meta } = type;
+  let place: string;
+  let rotate: string;
   if (view === 'rear') {
-    // Positive roll lifts the left side: seen from behind, clockwise.
+    // Positive roll lifts the left side: seen from behind, clockwise, on the right tyre.
     const tilt = vanTilt(drawnAngle);
-    const scale = Math.min(118 / type.width, 128 / type.height);
-    const pivot = tilt > 0 ? type.rearPivot : -type.rearPivot;
-    drawing = (
-      <RearCamper
-        type={type}
-        paint={paint}
-        transform={`translate(${SCENE_W / 2} ${GROUND_Y}) scale(${scale}) rotate(${tilt} ${pivot} 0)`}
-      />
-    );
+    const scale = Math.min(118 / meta.width, 128 / meta.height);
+    place = `translate(${SCENE_W / 2} ${GROUND_Y}) scale(${scale})`;
+    rotate = `rotate(${tilt} ${tilt > 0 ? meta.track / 2 : -meta.track / 2} 0)`;
   } else {
-    // Positive pitch lifts the front, which faces right: anticlockwise.
+    // Positive pitch lifts the front, which faces right: anticlockwise, on the rear axle.
     const tilt = -vanTilt(drawnAngle);
-    const scale = Math.min(236 / type.length, 118 / type.height);
-    const pivot = tilt > 0 ? type.axles[1] : type.axles[0];
-    const mid = (type.axles[0] + type.axles[1]) / 2;
-    drawing = (
-      <SideCamper
-        type={type}
-        paint={paint}
-        transform={`translate(${SCENE_W / 2} ${GROUND_Y}) scale(${scale}) translate(${-mid} 0) rotate(${tilt} ${pivot} 0)`}
-      />
-    );
+    const scale = Math.min(236 / meta.length, 118 / meta.height);
+    const mid = (meta.axles[0] + meta.axles[1]) / 2;
+    place = `translate(${SCENE_W / 2} ${GROUND_Y}) scale(${scale}) translate(${-mid} 0)`;
+    rotate = `rotate(${tilt} ${tilt > 0 ? meta.axles[1] : meta.axles[0]} 0)`;
   }
+  const shadow = view === 'rear' ? type.rearShadow : type.sideShadow;
 
   return (
     <Card style={styles.card}>
@@ -83,7 +75,14 @@ export function VanScene({ view, type, paint, angle, drawnAngle, t }: Props) {
         <Svg width="100%" height="100%" viewBox={`0 0 ${SCENE_W} ${SCENE_H}`} preserveAspectRatio="xMidYMax meet">
           <Rect x={-2000} y={GROUND_Y} width={4356} height={400} fill={colours.ground} />
           <Rect x={-2000} y={GROUND_Y} width={4356} height={3} fill={groundLevel ? colours.level : '#FFFFFF'} />
-          {drawing}
+          <ArtDefs />
+          <G transform={place}>
+            {/* The shadow stays on the ground; only the van tilts. */}
+            {shadow && <Art shapes={[shadow]} colour={colour} />}
+            <G transform={rotate}>
+              <Art shapes={view === 'rear' ? type.rear : type.side} colour={colour} />
+            </G>
+          </G>
         </Svg>
         {view === 'side' && <Text style={styles.exaggerated}>{t('tilt_exaggerated')}</Text>}
       </View>
