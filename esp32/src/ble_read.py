@@ -17,7 +17,11 @@ from config import (
     SENSOR_POWER_REGISTER,
     SENSOR_POWER_VOLTAGE_DIVISOR,
     SENSOR_RAW_FULL_SCALE,
+    SENSOR_SCAN_ACTIVE,
+    SENSOR_SCAN_DURATION_MS,
+    SENSOR_SCAN_INTERVAL_US,
     SENSOR_SCAN_TIMEOUT_MS,
+    SENSOR_SCAN_WINDOW_US,
     SENSOR_SETUP_TIMEOUT_MS,
     SENSOR_SILENT_RECONNECT_MS,
     SENSOR_REGISTER_PACKET_TYPE,
@@ -235,7 +239,12 @@ class WT901BLEClient:
         print("Scanning for %s:" % SENSOR_NAME, format_address(SENSOR_MAC))
 
         try:
-            self.ble.gap_scan(15000, 30000, 30000, True)
+            self.ble.gap_scan(
+                SENSOR_SCAN_DURATION_MS,
+                SENSOR_SCAN_INTERVAL_US,
+                SENSOR_SCAN_WINDOW_US,
+                SENSOR_SCAN_ACTIVE,
+            )
         except Exception as exc:
             self._set_state("ERROR")
             print("BLE scan failed:", exc)
@@ -314,6 +323,10 @@ class WT901BLEClient:
     def _irq(self, event, data):
         if event == _IRQ_SCAN_RESULT:
             addr_type, addr, adv_type, rssi, adv_data = data
+            # Most results are other devices: reject them on the first byte,
+            # before allocating anything (scan results arrive in bursts).
+            if addr[0] != SENSOR_MAC[0]:
+                return
 
             if bytes(addr) == SENSOR_MAC and not self.connected:
                 print("Found", SENSOR_NAME, format_address(addr), "RSSI", rssi)
