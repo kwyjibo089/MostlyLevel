@@ -85,16 +85,12 @@ READOUT_RECTS = (
 )
 READOUT_TEXT_INSET_X = 4
 READOUT_TEXT_INSET_Y = 10
-# Level frame: around the whole visible screen, header and menu included,
-# on every page. 4 px fits beside the menu buttons without covering them.
+# Level frame: around the page below the navigation, like the red warning
+# frame, on every page. 4 px stays clear of the LEVELLING cells (4 px from
+# the edge); the red frame (6 px) covers it completely.
 LEVEL_FRAME_THICKNESS = 4
-HEADER_BOTTOM = HEADER_Y + 19  # First row below the header's dark fill.
-LEVEL_FRAME_TOP_RECTS = (
-    (0, HEADER_Y, WIDTH, LEVEL_FRAME_THICKNESS),
-    (0, HEADER_Y, LEVEL_FRAME_THICKNESS, HORIZON_TOP - HEADER_Y),
-    (WIDTH - LEVEL_FRAME_THICKNESS, HEADER_Y, LEVEL_FRAME_THICKNESS, HORIZON_TOP - HEADER_Y),
-)
 LEVEL_FRAME_PAGE_RECTS = (
+    (0, HORIZON_TOP, WIDTH, LEVEL_FRAME_THICKNESS),
     (0, HORIZON_TOP, LEVEL_FRAME_THICKNESS, HEIGHT - HORIZON_TOP),
     (WIDTH - LEVEL_FRAME_THICKNESS, HORIZON_TOP, LEVEL_FRAME_THICKNESS, HEIGHT - HORIZON_TOP),
     (0, HEIGHT - LEVEL_FRAME_THICKNESS, WIDTH, LEVEL_FRAME_THICKNESS),
@@ -206,8 +202,6 @@ def draw_header(state):
     status_label = t(status_key) if status_key else state
     g.fill_rect(178, HEADER_Y + 6, 7, 7, status_colour)
     g.text(189, HEADER_Y + 5, status_label, status_colour)
-    if level_frame_active:
-        draw_level_frame_top(True)
 
 
 def draw_navigation():
@@ -360,14 +354,15 @@ CORNER_TEXT_KEYS = {
     "REAR LEFT": "rear_left",
     "REAR RIGHT": "rear_right",
 }
-CORNER_TABS_Y = HORIZON_TOP + 2
-CORNER_CONTENT_TOP = HORIZON_TOP + 20
+# The tabs sit below the level frame's top edge (and the red frame's).
+CORNER_TABS_Y = HORIZON_TOP + 6
+CORNER_CONTENT_TOP = HORIZON_TOP + 24
 # Cell rows keep fixed bottom edges and shrink when the top inset grows.
-WEDGE_TOP = HORIZON_TOP + 28
+WEDGE_TOP = HORIZON_TOP + 32
 WEDGE_BOTTOM = 288
 WEDGE_GAP = 20
 WEDGE_HEIGHT = (WEDGE_BOTTOM - WEDGE_TOP - WEDGE_GAP) // 2
-CORNER_TOP = HORIZON_TOP + 22
+CORNER_TOP = HORIZON_TOP + 26
 CORNER_BOTTOM = 306
 CORNER_GAP = 12
 CORNER_HEIGHT = (CORNER_BOTTOM - CORNER_TOP - CORNER_GAP) // 2
@@ -557,40 +552,24 @@ def is_level(pitch, roll, was_level=False):
 
 
 def draw_level_frame():
-    """The level frame's part around the page (composited with the page)."""
+    """The level frame around the page (composited with the ATTITUDE page)."""
     for x, y, width, height in LEVEL_FRAME_PAGE_RECTS:
         g.fill_rect(x, y, width, height, GREEN)
-
-
-def draw_level_frame_top(on):
-    """The level frame's part around the header and menu, drawn directly.
-
-    Turning it off restores the background: the header's dark fill and the
-    black rows beside the menu buttons (which start 4 px from the edge).
-    """
-    if on:
-        for x, y, width, height in LEVEL_FRAME_TOP_RECTS:
-            g.fill_rect(x, y, width, height, GREEN)
-        return
-    edge = LEVEL_FRAME_THICKNESS
-    g.fill_rect(0, HEADER_Y, WIDTH, edge, DARK)
-    for x in (0, WIDTH - edge):
-        g.fill_rect(x, HEADER_Y, edge, HEADER_BOTTOM - HEADER_Y, DARK)
-        g.fill_rect(x, HEADER_BOTTOM, edge, HORIZON_TOP - HEADER_BOTTOM, BLACK)
 
 
 def show_level_frame(on):
     """Turn the level frame on or off without redrawing the page.
 
-    On LEVELLING the page part lies at the screen edge, where that page draws
-    nothing, so it is drawn directly too; the strip cache is then stale.
+    ATTITUDE composites the frame with its page, so only LEVELLING needs
+    this: its frame lies at the page edge, where that page draws nothing, so
+    it is drawn directly; the strip cache is then stale.
     """
-    draw_level_frame_top(on)
-    if active_screen == 1:
-        for x, y, width, height in LEVEL_FRAME_PAGE_RECTS:
-            g.fill_rect(x, y, width, height, GREEN if on else BLACK)
-        if page_renderer is not None:
-            page_renderer.invalidate()
+    if active_screen != 1:
+        return
+    for x, y, width, height in LEVEL_FRAME_PAGE_RECTS:
+        g.fill_rect(x, y, width, height, GREEN if on else BLACK)
+    if page_renderer is not None:
+        page_renderer.invalidate()
 
 
 def draw_status_frame(colour):
@@ -1285,9 +1264,8 @@ def step():
                 last_level = level_frame_active
                 last_render_ms = time.ticks_ms()
             elif state_changed:
-                if level_frame_active:
-                    level_frame_active = False
-                    draw_level_frame_top(False)
+                # The red warning frame covers the green one completely.
+                level_frame_active = False
                 last_level = False
                 draw_sensor_warning(state)
         elif sensor.power_percent != last_battery_percent:

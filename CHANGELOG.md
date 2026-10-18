@@ -4,6 +4,7 @@ Notable project changes are recorded here. This file was introduced with the ini
 
 ## Unreleased
 
+- ESP32 display: the header and pages move back to the top edge (`SCREEN_TOP_INSET` 10 → 0), since the redesigned case no longer covers the display; the gained rows go to the pages. The green level frame now surrounds only the page, like the red warning frame, not the header and menu; the sub-page tabs sit 4 px lower so neither frame cuts into them. Reference and README images regenerated and reviewed; not yet seen on the device.
 - ESP32 BLE scanning listens 30 ms of every 100 ms, passively, instead of without pause, and rejects other devices' advertisements early. While the sensor was unavailable, the continuous scan left the board unable to answer USB, so deploys failed. Scan settings are now in `config.py` (`SENSOR_SCAN_*`, untested values).
 - Android app icon (owner's choice from four concepts): the camper seen from behind in an attitude indicator, with a level vial centred in the ground; adaptive layers with a one-colour layer for themed icons, and the same motif on the splash screen. Source: `mobile/scripts/app_icon.py`.
 - Android app: detailed camper drawings for all five types (side, rear, and top views) replace the simple shapes, with California- and Ducato-like model cues. Generated from `mobile/scripts/van_drawings.py` into `mobile/src/vanArt.ts`; the ground shadow no longer tilts with the van.

@@ -72,10 +72,12 @@ PITCH_PIXELS_PER_DEGREE = 1.8
 # readouts show the true angles. Untested values.
 VAN_TILT_GAIN = 3.0
 VAN_TILT_MAX_DEG = 20.0
-# Rows at the top of the LCD hidden by the printed case. Header, navigation,
-# and the top of each page move down by this amount; bottom and side
-# positions stay fixed. Owner-observed from a photo (~9 rows hidden).
-SCREEN_TOP_INSET = 10
+# Rows at the top of the LCD hidden by the case. Header, navigation, and the
+# top of each page move down by this amount; bottom and side positions stay
+# fixed. The first printed case hid ~9 rows (10 here); the redesigned case
+# (2026-10-18) leaves the whole display visible, so 0. Not yet checked on the
+# device with the new case.
+SCREEN_TOP_INSET = 0
 LEVEL_FRAME_THRESHOLD_DEG = 0.5
 LEVEL_FRAME_RELEASE_THRESHOLD_DEG = 0.7
 # Minimum wait between live redraws, counted from the end of the last one.
