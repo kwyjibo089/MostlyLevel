@@ -4,6 +4,7 @@ Notable project changes are recorded here. This file was introduced with the ini
 
 ## Unreleased
 
+- Android app icon (owner's choice from four concepts): the camper seen from behind in an attitude indicator, with a level vial centred in the ground; adaptive layers with a one-colour layer for themed icons, and the same motif on the splash screen. Source: `mobile/scripts/app_icon.py`.
 - Android app: detailed camper drawings for all five types (side, rear, and top views) replace the simple shapes, with California- and Ducato-like model cues. Generated from `mobile/scripts/van_drawings.py` into `mobile/src/vanArt.ts`; the ground shadow no longer tilts with the van.
 - Android app: the phone's own accelerometer can replace the WT901 (Settings › Sensor source). The phone lies flat, screen up, top toward the front; it has its own calibration. Choosing it disconnects the WT901 so the ESP32 display can use the sensor.
 - Hardware (owner's KiCad work, 2026-10-17): PCB rerouted and schematic updated; 22 Ω series resistors R11/R12 added; the display FPC connector J2 is no longer in the assembly BOM. Fabrication files moved from `fab/revA-draft/` to `fab/revA/`. The last DRC (`routing/drc12.json`) still reports 10 errors (6 incomplete thermal reliefs on F.Cu, 2 courtyard overlaps, 2 NPTH holes inside courtyards) and 4 mounting holes (H1–H4) missing from the schematic.

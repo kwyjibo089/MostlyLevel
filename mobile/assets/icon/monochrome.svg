@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><defs>
+<linearGradient id="shade" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#fff" stop-opacity="0.38"/>
+  <stop offset="0.12" stop-color="#fff" stop-opacity="0.12"/>
+  <stop offset="0.5" stop-color="#000" stop-opacity="0"/>
+  <stop offset="0.85" stop-color="#000" stop-opacity="0.10"/>
+  <stop offset="1" stop-color="#000" stop-opacity="0.22"/>
+</linearGradient>
+<linearGradient id="glass" x1="0" y1="0" x2="0.35" y2="1">
+  <stop offset="0" stop-color="#5a7387"/>
+  <stop offset="0.45" stop-color="#2a3a48"/>
+  <stop offset="1" stop-color="#141c24"/>
+</linearGradient>
+<linearGradient id="tint" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#3a4550"/>
+  <stop offset="1" stop-color="#11161b"/>
+</linearGradient>
+<radialGradient id="tyre" cx="0.5" cy="0.5" r="0.5">
+  <stop offset="0.6" stop-color="#2c3036"/>
+  <stop offset="0.85" stop-color="#1a1d21"/>
+  <stop offset="1" stop-color="#0c0e10"/>
+</radialGradient>
+<radialGradient id="rim" cx="0.42" cy="0.38" r="0.7">
+  <stop offset="0" stop-color="#f2f4f6"/>
+  <stop offset="0.55" stop-color="#b9c0c8"/>
+  <stop offset="1" stop-color="#7d858f"/>
+</radialGradient>
+<linearGradient id="plastic" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#3a3e44"/>
+  <stop offset="1" stop-color="#1b1e22"/>
+</linearGradient>
+<linearGradient id="awning" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#f4f6f8"/>
+  <stop offset="1" stop-color="#b8bec6"/>
+</linearGradient>
+<linearGradient id="lamp" x1="0" y1="0" x2="1" y2="1">
+  <stop offset="0" stop-color="#ffffff"/>
+  <stop offset="1" stop-color="#c9d2dc"/>
+</linearGradient>
+<linearGradient id="tail" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#ff6b5e"/>
+  <stop offset="1" stop-color="#b3221a"/>
+</linearGradient>
+<linearGradient id="smoked" x1="0" y1="0" x2="0.3" y2="1">
+  <stop offset="0" stop-color="#5d6773"/>
+  <stop offset="0.5" stop-color="#2c333b"/>
+  <stop offset="1" stop-color="#171b20"/>
+</linearGradient>
+<radialGradient id="shadow" cx="0.5" cy="0.5" r="0.5">
+  <stop offset="0" stop-color="#000" stop-opacity="0.42"/>
+  <stop offset="0.7" stop-color="#000" stop-opacity="0.16"/>
+  <stop offset="1" stop-color="#000" stop-opacity="0"/>
+</radialGradient>
+<linearGradient id="solar" x1="0" y1="0" x2="1" y2="1">
+  <stop offset="0" stop-color="#2d3e5c"/>
+  <stop offset="1" stop-color="#121a28"/>
+</linearGradient>
+<linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#4AA6FF"/><stop offset="1" stop-color="#1C6FD4"/></linearGradient>
+<linearGradient id="earth" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#C08024"/><stop offset="1" stop-color="#7E4C10"/></linearGradient></defs><path d="M288.3 412.3 A292 292 0 0 1 735.7 412.3" fill="none" stroke="#F4F7FA" stroke-width="16" stroke-linecap="round"/><line x1="512.0" y1="308.0" x2="512.0" y2="354.0" stroke="#F4F7FA" stroke-width="14" stroke-linecap="round"/><line x1="611.9" y1="325.6" x2="601.6" y2="353.8" stroke="#F4F7FA" stroke-width="14" stroke-linecap="round"/><line x1="412.1" y1="325.6" x2="422.4" y2="353.8" stroke="#F4F7FA" stroke-width="14" stroke-linecap="round"/><line x1="699.7" y1="376.3" x2="680.4" y2="399.3" stroke="#F4F7FA" stroke-width="14" stroke-linecap="round"/><line x1="324.3" y1="376.3" x2="343.6" y2="399.3" stroke="#F4F7FA" stroke-width="14" stroke-linecap="round"/><path d="M512 352 L490 392 L534 392 Z" fill="#F4F7FA"/><path d="M392 572 L392 396 Q392 366 422 366 L602 366 Q632 366 632 396 L632 572 Z" fill="#F4F7FA"/><rect x="404" y="560" width="42" height="40" rx="10" fill="#F4F7FA"/><rect x="578" y="560" width="42" height="40" rx="10" fill="#F4F7FA"/><rect x="392" y="695" width="240" height="64" rx="32" fill="none" stroke="#F4F7FA" stroke-width="14"/><line x1="478" y1="709" x2="478" y2="745" stroke="#F4F7FA" stroke-width="8" stroke-linecap="round"/><line x1="546" y1="709" x2="546" y2="745" stroke="#F4F7FA" stroke-width="8" stroke-linecap="round"/><ellipse cx="512" cy="727" rx="28" ry="17" fill="#F4F7FA"/></svg>
