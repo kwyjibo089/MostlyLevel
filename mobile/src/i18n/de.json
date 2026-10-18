@@ -81,5 +81,13 @@
   "colour_blue": "Blau",
   "colour_red": "Rot",
   "colour_sand": "Sand",
-  "colour_green": "Grün"
+  "colour_green": "Grün",
+  "status_no_sensor": "Kein Sensor",
+  "warning_no_sensor": "Dieses Telefon hat keinen Beschleunigungssensor",
+  "source": "Sensorquelle",
+  "source_wt901": "WT901-Bluetooth-Sensor",
+  "source_wt901_hint": "Fest im Fahrzeug, einmal kalibriert",
+  "source_phone": "Dieses Telefon",
+  "source_phone_hint": "Keine zusätzliche Hardware",
+  "source_phone_placement": "Telefon flach hinlegen, Bildschirm nach oben, Oberkante zur Fahrzeugfront. Immer an dieselbe Stelle legen und dort einmal kalibrieren."
 }

@@ -13,7 +13,7 @@ import { translator, TextKey } from '../i18n';
 import type { Dimensions } from '../levelling';
 import type { FoundDevice } from '../sensor/client';
 import { useSensorClient } from '../sensor/SensorProvider';
-import { useSettings } from '../settings/SettingsProvider';
+import { SENSOR_SOURCES, useSettings } from '../settings/SettingsProvider';
 import { colours, fonts } from '../theme';
 
 const SCAN_SECONDS = 10;
@@ -45,7 +45,28 @@ export default function SettingsScreen() {
           </View>
         </Section>
 
-        <SensorSection />
+        <Section title={t('source')}>
+          <View style={styles.grid}>
+            {SENSOR_SOURCES.map((source) => {
+              const selected = settings.source === source;
+              return (
+                <Pressable
+                  key={source}
+                  onPress={() => update({ source })}
+                  style={[styles.camperCard, selected && styles.selectedCard]}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
+                >
+                  <Text style={styles.cardTitle}>{t(source === 'phone' ? 'source_phone' : 'source_wt901')}</Text>
+                  <Text style={styles.cardHint}>{t(source === 'phone' ? 'source_phone_hint' : 'source_wt901_hint')}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {settings.source === 'phone' && <Text style={styles.cardHint}>{t('source_phone_placement')}</Text>}
+        </Section>
+
+        {settings.source === 'wt901' && <SensorSection />}
 
         <Section title={t('camper')}>
           <View style={styles.grid}>
