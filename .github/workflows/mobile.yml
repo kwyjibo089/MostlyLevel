@@ -44,5 +44,9 @@ jobs:
       - name: Tests (including parity with the ESP32 fixtures)
         run: npx jest --ci
 
-      - name: Expo dependency check
+      # Advisory: expo-doctor also fails when Expo publishes newer patch
+      # versions, which would turn CI red without a change here. It reports
+      # as a warning; update with `npx expo install --fix`.
+      - name: Expo dependency check (advisory)
+        continue-on-error: true
         run: npx expo-doctor
