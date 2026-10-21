@@ -4,6 +4,7 @@ Notable project changes are recorded here. This file was introduced with the ini
 
 ## Unreleased
 
+- GitHub account renamed from kwyjibo089 to roman-mueller-ch: README links updated, and the Android app ID changes to `io.github.roman_mueller_ch.mostlylevel` (before any release). Android treats it as a new app, so existing installs must be replaced and their settings entered again.
 - Documentation: device results from 2026-10-18. The top-edge layout and page-only level frame are confirmed with the new case. The gentler BLE scan did not fix the board being unreachable over USB while the sensor is unavailable; the cause is unknown (rated not important by the owner). Deploy while the display is connected to the sensor.
 - ESP32 display: the header and pages move back to the top edge (`SCREEN_TOP_INSET` 10 → 0), since the redesigned case no longer covers the display; the gained rows go to the pages. The green level frame now surrounds only the page, like the red warning frame, not the header and menu; the sub-page tabs sit 4 px lower so neither frame cuts into them. Reference and README images regenerated and reviewed; not yet seen on the device.
 - ESP32 BLE scanning listens 30 ms of every 100 ms, passively, instead of without pause, and rejects other devices' advertisements early. While the sensor was unavailable, the continuous scan left the board unable to answer USB, so deploys failed. Scan settings are now in `config.py` (`SENSOR_SCAN_*`, untested values).
