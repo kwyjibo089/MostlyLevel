@@ -1,6 +1,6 @@
 # MostlyLevel
 
-[![esp32](https://github.com/kwyjibo089/MostlyLevel/actions/workflows/esp32.yml/badge.svg)](https://github.com/kwyjibo089/MostlyLevel/actions/workflows/esp32.yml)
+[![esp32](https://github.com/roman-mueller-ch/MostlyLevel/actions/workflows/esp32.yml/badge.svg)](https://github.com/roman-mueller-ch/MostlyLevel/actions/workflows/esp32.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 **A touchscreen levelling display for campervans.** A small ESP32-S3 display reads a Bluetooth tilt sensor mounted in the van and shows, live, how the van is tilted and how much to lift each wheel to get it level.

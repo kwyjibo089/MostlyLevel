@@ -17,7 +17,7 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "io.github.kwyjibo089.mostlylevel"
+      "package": "io.github.roman_mueller_ch.mostlylevel"
     },
     "plugins": [
       "expo-router",
